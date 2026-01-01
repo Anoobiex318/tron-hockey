@@ -257,13 +257,53 @@ canvas {
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
-/* Difficulty Selector */
 .difficulty-row {
     display: flex;
+    flex-direction: row;
     justify-content: center;
     align-items: center;
     gap: 8px;
     width: 100%;
+}
+
+.lobby-section {
+    width: 100%;
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.lobby-row {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.lobby-row .btn {
+    flex: 1;
+    padding: 12px;
+    font-size: 0.8rem;
+}
+
+.qr-container {
+    background: #fff;
+    padding: 15px;
+    border-radius: 15px;
+    margin: 20px 0;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+}
+
+.qr-container img {
+    display: block;
+    width: 200px;
+    height: 200px;
+}
+
+.join-choice {
+    width: 100%;
+    margin: 10px 0;
 }
 
 .diff-btn {
@@ -311,7 +351,29 @@ canvas {
     z-index: 1000;
 }
 
-.info-toggle:hover {
+.share-toggle {
+    position: absolute;
+    top: 25px;
+    right: 79px;
+    /* 25 + 44 + 10 gap */
+    width: 44px;
+    height: 44px;
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    color: #fff;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.2rem;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.info-toggle:hover,
+.share-toggle:hover {
     background: var(--primary-color);
     color: #000;
     box-shadow: 0 0 15px var(--primary-glow);
@@ -426,4 +488,48 @@ input[type="text"]:focus {
 #game-over-modal,
 #pause-modal {
     animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Progress & Loading */
+.progress-container {
+    width: 100%;
+    max-width: 300px;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    margin: 20px 0;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.progress-bar {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    box-shadow: 0 0 20px var(--primary-glow);
+    transition: width 0.3s ease;
+}
+
+.loading-text {
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    color: var(--primary-color);
+    text-transform: uppercase;
+    animation: neon-pulse 1.5s infinite;
+}
+
+@keyframes neon-pulse {
+
+    0%,
+    100% {
+        opacity: 0.5;
+        text-shadow: 0 0 5px var(--primary-glow);
+    }
+
+    50% {
+        opacity: 1;
+        text-shadow: 0 0 15px var(--primary-glow);
+    }
 }

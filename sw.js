@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tron-hockey-v6';
+const CACHE_NAME = 'tron-hockey-v17';
 const ASSETS = [
     './',
     './index.html',

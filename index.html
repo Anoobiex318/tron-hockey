@@ -15,6 +15,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&family=Montserrat:wght@900&display=swap"
         rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 
 <body>
@@ -30,10 +32,11 @@
 
         <div id="main-menu" class="menu-overlay">
             <div class="info-toggle" onclick="document.getElementById('info-modal').classList.remove('hidden')">?</div>
+            <div class="share-toggle" onclick="shareApp()">&#128279;</div>
             <img src="icon.png" class="menu-logo" alt="Logo">
             <div class="title" style="position: relative;">
                 TRON<br>HOCKEY<sup id="app-version-display"
-                    style="font-size: 0.6rem; font-family: 'Outfit', sans-serif; opacity: 0.4; letter-spacing: 1px; margin-left: 2px; text-transform: none; -webkit-text-fill-color: #fff; font-weight: normal;">v1.0.30</sup>
+                    style="font-size: 0.6rem; font-family: 'Outfit', sans-serif; opacity: 0.4; letter-spacing: 1px; margin-left: 2px; text-transform: none; -webkit-text-fill-color: #fff; font-weight: normal;">v1.2.9</sup>
             </div>
             <div class="subtitle">NEON LEAGUE</div>
 
@@ -63,9 +66,6 @@
                 <button class="btn btn-magenta" onclick="showMainMenu()">BACK</button>
             </div>
 
-            <div id="highscore-display" style="margin-top: 15px; color: #0ff; text-shadow: 0 0 5px #0ff;">
-                WINS: 0
-            </div>
         </div>
 
         <!-- Gameplay UI (Pause/Flip) -->
@@ -106,22 +106,75 @@
         <div class="title">ONLINE LOBBY</div>
         <div class="subtitle" id="lobby-status">CONNECTING...</div>
 
-        <div class="menu-group">
-            <div class="lobby-section">
-                <label for="peer-id-input">Your ID:</label>
-                <input type="text" id="peer-id-input" readonly>
-                <button class="btn btn-small" onclick="copyPeerId()">Copy</button>
+        <div class="menu-content">
+            <div class="menu-group" style="padding: 20px;">
+                <div class="lobby-section">
+                    <label style="color: rgba(255,255,255,0.5); font-size: 0.8rem; letter-spacing: 1px;">MY GRID
+                        ID</label>
+                    <input type="text" id="peer-id-input" readonly
+                        style="background: rgba(0,0,0,0.3); border: 1px solid var(--primary-color); border-radius: 8px; padding: 10px; width: 100%; text-align: center; color: #0ff; font-family: monospace; font-size: 1.1rem; margin: 10px 0;">
+                    <div class="lobby-row">
+                        <button class="btn btn-cyan" onclick="copyPeerId()">COPY ID</button>
+                        <button class="btn btn-yellow" onclick="openShareModal()">SHARE GAME</button>
+                    </div>
+                </div>
             </div>
-            <div class="lobby-section">
-                <label for="connect-id-input">Connect to ID:</label>
-                <input type="text" id="connect-id-input" placeholder="Enter opponent's ID">
-                <button class="btn btn-small" onclick="connectToPeer()">Connect</button>
-            </div>
+
+            <button class="btn btn-cyan" onclick="openJoinOptions()">JOIN GAME</button>
+            <button class="btn btn-magenta" onclick="closeLobby()">EXIT LOBBY</button>
         </div>
 
-        <div id="connection-status" style="margin-top: 10px;"></div>
+        <div id="connection-status" style="margin-top: 15px; color: var(--primary-color); font-weight: bold;"></div>
+    </div>
 
-        <button class="btn btn-magenta" onclick="closeLobby()">EXIT LOBBY</button>
+    <!-- Share Modal -->
+    <div id="share-modal" class="menu-overlay hidden" style="z-index: 2200;">
+        <div class="title" style="font-size: 2.2rem;">SHARE GAME</div>
+        <div class="subtitle">OR SCAN QR CODE</div>
+        <div id="qrcode-container" class="qr-container"
+            style="background: #fff; padding: 15px; border-radius: 12px; display: flex; justify-content: center; align-items: center; width: 100%; max-width: 250px; height: 250px; box-sizing: border-box;">
+            <!-- QR code will be generated here -->
+        </div>
+        <div class="menu-content" style="margin-top: 15px;">
+            <button class="btn btn-cyan" onclick="copyShareLink()">COPY GAME LINK</button>
+            <button class="btn btn-magenta"
+                onclick="document.getElementById('share-modal').classList.add('hidden')">CLOSE</button>
+        </div>
+    </div>
+
+    <!-- Join Options Modal -->
+    <div id="join-options-modal" class="menu-overlay hidden" style="z-index: 2200;">
+        <div class="title" style="font-size: 2.22rem;">JOIN GAME</div>
+        <div class="subtitle">SELECT METHOD</div>
+        <div class="menu-content">
+            <button class="btn btn-cyan" onclick="openJoinInput()">ENTER OPPONENT ID</button>
+            <button class="btn btn-yellow" onclick="openScanner()">SCAN QR CODE</button>
+            <button class="btn btn-magenta"
+                onclick="document.getElementById('join-options-modal').classList.add('hidden')">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- Scanner Modal -->
+    <div id="scanner-modal" class="menu-overlay hidden" style="z-index: 2400; background: #000;">
+        <div class="title" style="font-size: 2rem;">SCANNER</div>
+        <div id="reader"
+            style="width: 100%; max-width: 400px; border-radius: 20px; overflow: hidden; margin-bottom: 20px; background: #111;">
+        </div>
+        <div class="menu-content">
+            <button class="btn btn-magenta" onclick="stopScanner()">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- Join ID Sub-Modal -->
+    <div id="join-id-modal" class="menu-overlay hidden" style="z-index: 2300;">
+        <div class="title" style="font-size: 2rem;">CONNECT</div>
+        <div class="subtitle">ENTER TARGET ID</div>
+        <div class="menu-content">
+            <input type="text" id="connect-id-input" placeholder="Opponent ID" style="width: 100%; max-width: 320px;">
+            <button class="btn btn-cyan" onclick="connectToPeerFromInput()">CONNECT</button>
+            <button class="btn btn-magenta"
+                onclick="document.getElementById('join-id-modal').classList.add('hidden')">BACK</button>
+        </div>
     </div>
 
     <!-- Pause Menu (This is full screen overlay, can stay out or in, but usually full screen is better out) -->
@@ -150,7 +203,8 @@
     <!-- Offline Warning Modal -->
     <div id="offline-modal" class="menu-overlay hidden" style="z-index: 2000;">
         <div class="title" style="color: #ff3366; text-shadow: 0 0 10px #ff3366;">OFFLINE</div>
-        <div class="subtitle" style="font-size: 1rem;">Internet Connection Required</div>
+        <div class="subtitle" style="font-size: 1rem; text-align: center; margin-bottom: 20px;">Internet Connection
+            Required</div>
         <button class="btn" onclick="document.getElementById('offline-modal').classList.add('hidden')">OK</button>
     </div>
 
@@ -166,6 +220,17 @@
             <button class="btn btn-magenta"
                 onclick="document.getElementById('update-modal').classList.add('hidden')">CANCEL</button>
         </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loading-modal" class="menu-overlay hidden" style="z-index: 3000;">
+        <div class="title" style="font-size: 2.5rem; color: var(--secondary-color);">PROCESSING</div>
+        <div class="subtitle" style="font-size: 1rem; margin-bottom: 20px; text-align: center;">Applying Latest Systems
+        </div>
+        <div class="progress-container">
+            <div id="update-progress-bar" class="progress-bar"></div>
+        </div>
+        <div id="loading-status" class="loading-text">DELETING OLD FILES...</div>
     </div>
 
     <!-- Alerts/Notice Modal -->
@@ -207,7 +272,8 @@
                 </div>
             </div>
 
-            <p style="margin-bottom: 5px; font-style: italic; color: #888;">Inspired by Symbian OS Game:<br>Tron Hockey
+            <p style="margin-bottom: 5px; font-style: italic; color: #888;">Inspired by Symbian OS Game:<br>Tron
+                Hockey
                 &#8482</p>
             <p style="margin-top: 20px; font-size: 0.8rem; color: #555;">All rights reserve 2015</p>
         </div>

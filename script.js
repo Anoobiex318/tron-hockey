@@ -24,7 +24,7 @@ const CONFIG = {
     puckMaxSpeedMultiplier: 0.04,
     paddleRadiusRatio: 0.08,
     puckRadiusRatio: 0.04,
-    winningScore: 7
+    winningScore: 12
 };
 
 const DIFFICULTIES = {
@@ -132,10 +132,10 @@ function resetPositions() {
     state.puck.vx = 0; state.puck.vy = 0;
     if (state.turn === 1) {
         state.puck.x = state.p1.x;
-        state.puck.y = state.p1.y - state.p1.radius - state.puck.radius - 5;
+        state.puck.y = state.p1.y - state.p1.radius - state.puck.radius - 8;
     } else {
         state.puck.x = state.p2.x;
-        state.puck.y = state.p2.y + state.p2.radius + state.puck.radius + 5;
+        state.puck.y = state.p2.y + state.p2.radius + state.puck.radius + 8;
     }
     state.awaitingServe = true;
     updateTurnUI();
@@ -191,11 +191,31 @@ function draw() {
     const topCol = isFlipped ? state.p1.color : state.p2.color;
     const botCol = isFlipped ? state.p2.color : state.p1.color;
 
-    ctx.shadowBlur = 15;
+    // Goal Walls (Solid Corners)
+    const goalHalf = viewLen(state.field.width * 0.2); // Goal is center 40%
+    ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    // Top Corners
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w / 2 - goalHalf, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(w / 2 + goalHalf, 0); ctx.lineTo(w, 0); ctx.stroke();
+    // Bottom Corners
+    ctx.beginPath(); ctx.moveTo(0, h); ctx.lineTo(w / 2 - goalHalf, h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(w / 2 + goalHalf, h); ctx.lineTo(w, h); ctx.stroke();
+
+    // Goal Keeper / Scoring Markings
+    ctx.lineWidth = 3; ctx.shadowBlur = 15;
+    // Top Goal Arc
     ctx.shadowColor = topCol; ctx.strokeStyle = topCol;
-    ctx.beginPath(); ctx.arc(w / 2, -50, gr, 0, Math.PI, false); ctx.stroke();
+    ctx.beginPath(); ctx.arc(w / 2, 0, goalHalf, 0, Math.PI, false); ctx.stroke();
+    // Top Goal Line (Subtle)
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.beginPath(); ctx.moveTo(w / 2 - goalHalf, 0); ctx.lineTo(w / 2 + goalHalf, 0); ctx.stroke();
+
+    // Bottom Goal Arc
     ctx.shadowColor = botCol; ctx.strokeStyle = botCol;
-    ctx.beginPath(); ctx.arc(w / 2, h + 50, gr, Math.PI, 0, false); ctx.stroke();
+    ctx.beginPath(); ctx.arc(w / 2, h, goalHalf, Math.PI, 0, false); ctx.stroke();
+    // Bottom Goal Line (Subtle)
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.beginPath(); ctx.moveTo(w / 2 - goalHalf, h); ctx.lineTo(w / 2 + goalHalf, h); ctx.stroke();
     ctx.shadowBlur = 0;
 
     // Scores
@@ -336,9 +356,31 @@ function update() {
     if (state.puck.x < state.puck.radius) { state.puck.x = state.puck.radius; state.puck.vx *= -CONFIG.wallBounce; playSound('wall'); }
     if (state.puck.x > state.field.width - state.puck.radius) { state.puck.x = state.field.width - state.puck.radius; state.puck.vx *= -CONFIG.wallBounce; playSound('wall'); }
 
-    // Goal
-    if (state.puck.y < 0) handleGoal(1);
-    else if (state.puck.y > state.field.height) handleGoal(2);
+    // Goal & Corner Physics
+    const goalGate = state.field.width * 0.2; // Half-width of goal (40% total)
+    const gMin = state.field.width / 2 - goalGate;
+    const gMax = state.field.width / 2 + goalGate;
+
+    // Top Boundary
+    if (state.puck.y < state.puck.radius) {
+        if (state.puck.x > gMin && state.puck.x < gMax) {
+            if (state.puck.y < 0) handleGoal(1);
+        } else {
+            state.puck.y = state.puck.radius;
+            state.puck.vy *= -CONFIG.wallBounce;
+            playSound('wall');
+        }
+    }
+    // Bottom Boundary
+    else if (state.puck.y > state.field.height - state.puck.radius) {
+        if (state.puck.x > gMin && state.puck.x < gMax) {
+            if (state.puck.y > state.field.height) handleGoal(2);
+        } else {
+            state.puck.y = state.field.height - state.puck.radius;
+            state.puck.vy *= -CONFIG.wallBounce;
+            playSound('wall');
+        }
+    }
 
     // Collisions
     checkCollision(state.p1); checkCollision(state.p2);
@@ -393,8 +435,11 @@ function initPeer() {
         localStorage.setItem('tron_hockey_peer_id', id);
         document.getElementById('peer-id-input').value = id;
         document.getElementById('lobby-status').textContent = "READY TO CONNECT";
-        const gameId = new URLSearchParams(window.location.search).get('game');
-        if (gameId && gameId !== id) { openLobby(); document.getElementById('connect-id-input').value = gameId; setTimeout(connectToPeer, 500); }
+        const gameId = new URLSearchParams(window.location.search).get('game') || new URLSearchParams(window.location.search).get('join');
+        if (gameId && gameId !== id) {
+            document.getElementById('connect-id-input').value = gameId;
+            setTimeout(() => connectToPeer(gameId), 500);
+        }
     });
     peer.on('error', err => {
         if (err.type === 'unavailable-id') { peer.destroy(); peer = null; initPeer(); }
@@ -501,9 +546,117 @@ canvas.addEventListener('touchmove', e => {
     for (let t of e.touches) handleInput(logicX(t.clientX - r.left), logicY(t.clientY - r.top));
 }, { passive: false });
 
-window.openLobby = () => { document.getElementById('main-menu').classList.add('hidden'); document.getElementById('lobby-modal').classList.remove('hidden'); initPeer(); };
-window.copyPeerId = () => { navigator.clipboard.writeText(document.getElementById('peer-id-input').value); document.getElementById('lobby-status').textContent = "ID COPIED!"; };
-window.connectToPeer = () => { const id = document.getElementById('connect-id-input').value.trim(); if (!id) return; conn = peer.connect(id, { reliable: false }); isHost = false; setupConn(); };
+window.openLobby = () => {
+    if (!navigator.onLine) {
+        document.getElementById('offline-modal').classList.remove('hidden');
+        return;
+    }
+    document.getElementById('main-menu').classList.add('hidden');
+    document.getElementById('lobby-modal').classList.remove('hidden');
+    initPeer();
+};
+window.copyPeerId = () => {
+    navigator.clipboard.writeText(document.getElementById('peer-id-input').value);
+    document.getElementById('lobby-status').textContent = "ID COPIED!";
+    setTimeout(() => { document.getElementById('lobby-status').textContent = "READY TO CONNECT"; }, 2000);
+};
+
+window.openShareModal = () => {
+    const id = document.getElementById('peer-id-input').value;
+    if (!id) return;
+
+    const container = document.getElementById('qrcode-container');
+    container.innerHTML = ""; // Clear old one
+
+    // Generate QR code locally (Free, Offline, Forever)
+    const url = window.location.origin + window.location.pathname + "?join=" + id;
+    new QRCode(container, {
+        text: url,
+        width: 220,
+        height: 220,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+
+    document.getElementById('share-modal').classList.remove('hidden');
+};
+
+window.copyShareLink = () => {
+    const id = document.getElementById('peer-id-input').value;
+    const url = window.location.origin + window.location.pathname + "?join=" + id;
+    navigator.clipboard.writeText(url);
+    showAlert("COPIED", "Game link copied to clipboard!");
+};
+
+window.openJoinOptions = () => {
+    document.getElementById('join-options-modal').classList.remove('hidden');
+};
+
+window.openJoinInput = () => {
+    document.getElementById('join-options-modal').classList.add('hidden');
+    document.getElementById('join-id-modal').classList.remove('hidden');
+};
+
+window.connectToPeerFromInput = () => {
+    const id = document.getElementById('connect-id-input').value.trim();
+    if (!id) return;
+    connectToPeer(id);
+    document.getElementById('join-id-modal').classList.add('hidden');
+};
+
+window.connectToPeer = (targetId) => {
+    const id = targetId || document.getElementById('connect-id-input').value.trim();
+    if (!id) return;
+    conn = peer.connect(id, { reliable: false });
+    isHost = false;
+    setupConn();
+};
+
+let html5QrCode = null;
+
+window.openScanner = () => {
+    document.getElementById('join-options-modal').classList.add('hidden');
+    document.getElementById('scanner-modal').classList.remove('hidden');
+
+    html5QrCode = new Html5Qrcode("reader");
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+            // Success: can be a URL or a raw ID (from 1D barcode)
+            const id = extractIdFromUrl(decodedText);
+            stopScanner();
+            if (id) connectToPeer(id);
+        },
+        (errorMessage) => { /* ignore scanning errors */ }
+    ).catch(err => {
+        showAlert("CAMERA ERROR", "Please ensure camera permissions are granted.");
+        stopScanner();
+    });
+};
+
+function extractIdFromUrl(text) {
+    // If it's a URL, extract 'join' param. If it's just a string, it's the ID.
+    try {
+        const url = new URL(text);
+        return url.searchParams.get('join') || url.searchParams.get('game') || text;
+    } catch (e) {
+        return text;
+    }
+}
+
+window.stopScanner = async () => {
+    if (html5QrCode) {
+        try {
+            await html5QrCode.stop();
+        } catch (e) { }
+        html5QrCode = null;
+    }
+    document.getElementById('scanner-modal').classList.add('hidden');
+};
 window.togglePause = () => { state.paused = !state.paused; document.getElementById('pause-modal').classList.toggle('hidden', !state.paused); };
 window.stopGame = () => {
     state.running = false;
@@ -549,12 +702,27 @@ window.restartGame = () => {
 
 window.endGame = (w) => {
     state.running = false; if (state.mode === 'online_host') broadcast({ type: 'game_over', p1Won: w });
-    const win = (state.mode === 'online_client') ? !w : w;
-    document.getElementById('game-over-title').textContent = win ? "YOU WIN" : "YOU LOSE";
+    const title = document.getElementById('game-over-title');
+    if (state.mode === 'local') {
+        const winner = w ? "PLAYER 1" : "PLAYER 2";
+        const color = w ? state.p1.color : state.p2.color;
+        title.textContent = winner + " WINS";
+        title.style.background = "none";
+        title.style.webkitTextFillColor = color;
+        title.style.filter = `drop-shadow(0 0 15px ${color})`;
+    } else {
+        const win = (state.mode === 'online_client') ? !w : w;
+        title.textContent = win ? "YOU WIN" : "YOU LOSE";
+        title.style.background = ""; // Restore default
+        title.style.webkitTextFillColor = "";
+        title.style.filter = "";
+    }
     document.getElementById('game-over-score').textContent = `${state.p1.score} - ${state.p2.score}`;
     document.getElementById('game-over-modal').classList.remove('hidden');
 };
+
 window.showAlert = (t, m) => { document.getElementById('alert-title').textContent = t; document.getElementById('alert-message').textContent = m; document.getElementById('alert-modal').classList.remove('hidden'); };
+
 
 setInterval(update, 1000 / 60);
 requestAnimationFrame(draw);
@@ -562,29 +730,63 @@ window.addEventListener('resize', resize);
 setTimeout(() => { resize(); updateVersionDisplay(); }, 100);
 
 window.updateVersionDisplay = () => {
-    const v = localStorage.getItem('app_version') || '1.0.30';
+    const v = localStorage.getItem('app_version') || '1.2.9';
     const display = document.getElementById('app-version-display');
     if (display) display.textContent = `v${v}`;
 };
 
 window.performUpdate = async () => {
-    if (window.pendingVersion) {
-        localStorage.setItem('app_version', window.pendingVersion);
-    }
+    const modal = document.getElementById('loading-modal');
+    const bar = document.getElementById('update-progress-bar');
+    const status = document.getElementById('loading-status');
+    const updateModal = document.getElementById('update-modal');
 
-    // Clear Service Worker Caches
-    if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(key => caches.delete(key)));
-    }
+    if (updateModal) updateModal.classList.add('hidden');
+    if (modal) modal.classList.remove('hidden');
 
-    // Unregister Service Workers
-    if ('serviceWorker' in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        for (let reg of regs) { await reg.unregister(); }
-    }
+    const setProgress = (p, text) => {
+        if (bar) bar.style.width = p + '%';
+        if (status) status.textContent = text;
+    };
 
-    window.location.reload(true);
+    try {
+        setProgress(10, "INITIALIZING...");
+        await new Promise(r => setTimeout(r, 600));
+
+        if (window.pendingVersion) {
+            localStorage.setItem('app_version', window.pendingVersion);
+        }
+        setProgress(30, "CLEANING CACHE...");
+        await new Promise(r => setTimeout(r, 800));
+
+        // Clear Service Worker Caches
+        if ('caches' in window) {
+            const keys = await caches.keys();
+            for (let i = 0; i < keys.length; i++) {
+                await caches.delete(keys[i]);
+                setProgress(30 + ((i + 1) / keys.length) * 30, `DELETING: ${keys[i]}`);
+            }
+        }
+
+        setProgress(70, "UNREGISTERING SYSTEMS...");
+        await new Promise(r => setTimeout(r, 600));
+
+        // Unregister Service Workers
+        if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (let i = 0; i < regs.length; i++) {
+                await regs[i].unregister();
+                setProgress(70 + ((i + 1) / regs.length) * 20, "SYSTEM DETACHED");
+            }
+        }
+
+        setProgress(100, "SYSTEM REBOOT...");
+        await new Promise(r => setTimeout(r, 800));
+        window.location.reload(true);
+    } catch (e) {
+        console.error("Update failed", e);
+        window.location.reload(true);
+    }
 };
 
 window.updateApp = async () => {
@@ -616,6 +818,25 @@ window.updateApp = async () => {
         setTimeout(() => { if (btn) btn.textContent = "CHECK UPDATES"; }, 2000);
     }
 };
+window.shareApp = () => {
+    const url = window.location.origin + window.location.pathname;
+    if (navigator.share) {
+        navigator.share({
+            title: 'Tron Hockey',
+            text: 'Play Tron Hockey - Neon League 1v1!',
+            url: url
+        }).catch(err => console.log('Share failed', err));
+    } else {
+        const tempInput = document.createElement('input');
+        tempInput.value = url;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        showAlert("LINK COPIED", "App URL copied! Share it with your friends.");
+    }
+};
+
 function copyToClipboard(t, l) { navigator.clipboard.writeText(t).then(() => console.log(l + " copied")); }
 
 // PWA Installation Logic
