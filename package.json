@@ -1,0 +1,17 @@
+{
+  "name": "tron-hockey",
+  "version": "1.0.0",
+  "description": "",
+  "main": "script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "copyfiles -f index.html style.css manifest.json sw.js icon.png public && javascript-obfuscator script.js --output public/script.js --compact true --self-defending false --debug-protection false"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "copyfiles": "^2.4.1",
+    "javascript-obfuscator": "^5.1.0"
+  }
+}

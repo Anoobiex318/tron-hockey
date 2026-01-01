@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tron Hockey</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" type="image/png" href="icon.png">
+</head>
+
+<body>
+
+    <div class="scanlines"></div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <div class="ui-layer">
+            <!-- Score is now on canvas -->
+        </div>
+
+        <div id="main-menu" class="menu-overlay">
+            <div class="title">TRON<br>HOCKEY</div>
+            <div class="subtitle">NEON LEAGUE</div>
+
+            <!-- Mode Menu -->
+            <div id="mode-menu">
+                <button class="btn" onclick="showCpuMenu()">VS CPU</button>
+                <button class="btn btn-secondary" onclick="startGame('local')">Local (2P)</button>
+                <button class="btn btn-secondary" onclick="openLobby()"
+                    style="border-color: #ff3366; color: #ff3366; box-shadow: 0 0 10px #ff3366;">ONLINE 1v1</button>
+            </div>
+
+            <!-- CPU Difficulty Menu (Hidden) -->
+            <div id="cpu-menu" class="hidden">
+                <div class="menu-group">
+                    <div class="difficulty-label">DIFFICULTY</div>
+                    <input type="hidden" id="difficulty-select" value="medium">
+                    <div class="difficulty-row">
+                        <div class="diff-btn active" onclick="selectDiff('medium', this)">MEDIUM</div>
+                        <div class="diff-btn" onclick="selectDiff('difficult', this)">DIFFICULT</div>
+                        <div class="diff-btn" onclick="selectDiff('insane', this)">INSANE</div>
+                    </div>
+                </div>
+                <button class="btn" onclick="startGame('cpu')">START GAME</button>
+                <button class="btn btn-secondary" onclick="showMainMenu()">BACK</button>
+            </div>
+
+            <div id="highscore-display" style="margin-top: 15px; color: #0ff; text-shadow: 0 0 5px #0ff;">
+                WINS: 0
+            </div>
+        </div>
+    </div>
+
+    <div id="game-over-modal" class="menu-overlay hidden">
+        <div class="title" id="game-over-title">YOU WIN</div>
+        <div class="subtitle" id="game-over-score">7 - 5</div>
+        <button class="btn" onclick="returnToMenu()">MAIN MENU</button>
+        <button class="btn btn-secondary" onclick="restartGame()">REMATCH</button>
+    </div>
+
+    <div id="lobby-modal" class="menu-overlay hidden">
+        <div class="title">ONLINE LOBBY</div>
+        <div class="subtitle" id="lobby-status">Connecting...</div>
+
+        <div class="menu-group">
+            <div class="lobby-section">
+                <label for="peer-id-input">Your ID:</label>
+                <input type="text" id="peer-id-input" readonly>
+                <button class="btn btn-small" onclick="copyPeerId()">Copy</button>
+            </div>
+            <div class="lobby-section">
+                <label for="connect-id-input">Connect to ID:</label>
+                <input type="text" id="connect-id-input" placeholder="Enter opponent's ID">
+                <button class="btn btn-small" onclick="connectToPeer()">Connect</button>
+            </div>
+        </div>
+
+        <div id="connection-status" class="subtitle" style="margin-top: 10px;"></div>
+
+        <button class="btn" onclick="closeLobby()">BACK</button>
+    </div>
+
+    <!-- Gameplay UI -->
+    <div id="game-ui" class="ui-layer hidden">
+        <button id="pause-btn" class="icon-btn" onclick="togglePause()">
+            ||
+        </button>
+        <button id="flip-btn" class="icon-btn" onclick="toggleFlip()" style="margin-left: 10px;">
+            &#8635; <!-- Refresh/Rotate Icon -->
+        </button>
+    </div>
+
+    <!-- Pause Menu -->
+    <div id="pause-modal" class="menu-overlay hidden">
+        <div id="pause-title" class="title">PAUSED</div>
+        <button id="resume-btn" class="btn" onclick="togglePause()">RESUME</button>
+        <button class="btn btn-secondary" onclick="stopGame()">EXIT</button>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="script.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('SW registered!', reg))
+                .catch(err => console.log('SW failed', err));
+        }
+    </script>
+</body>
+
+</html>

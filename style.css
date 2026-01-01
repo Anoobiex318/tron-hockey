@@ -1,0 +1,360 @@
+:root {
+    --primary-color: #0ff;
+    --secondary-color: #ffaa00;
+    --bg-color: #050505;
+    --grid-color: rgba(0, 255, 255, 0.1);
+}
+
+* {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #01080b;
+    /* texture overlay handled in canvas now */
+    background-size: cover;
+    background-position: center;
+    background-position: center;
+    overflow: hidden;
+    font-family: 'Courier New', Courier, monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    /* Responsive logical size */
+    max-width: 600px;
+    /* Keep mobile phone aspect ratio somewhat */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+canvas {
+    /* box-shadow: 0 0 20px var(--primary-color), inset 0 0 20px var(--primary-color); */
+    /* border: 2px solid var(--primary-color); */
+    border-radius: 4px;
+    background: transparent;
+    width: 100%;
+    height: 100%;
+}
+
+.ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+}
+
+.score-board {
+    display: none;
+    /* Moved to Canvas */
+}
+
+.menu-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    pointer-events: auto;
+    z-index: 10;
+}
+
+.title {
+    font-size: 3.5rem;
+    color: var(--primary-color);
+    text-shadow: 0 0 15px var(--primary-color), 0 0 30px var(--primary-color);
+    margin-bottom: 10px;
+    text-align: center;
+    line-height: 1;
+    font-family: sans-serif;
+    letter-spacing: -2px;
+}
+
+.subtitle {
+    font-size: 1.5rem;
+    color: #fff;
+    margin-bottom: 40px;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+}
+
+.btn {
+    background: transparent;
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+    padding: 15px 40px;
+    font-size: 1.5rem;
+    margin: 10px;
+    border-radius: 30px;
+    /* Pill shape like Nokia buttons */
+    cursor: pointer;
+    text-shadow: 0 0 5px var(--primary-color);
+    box-shadow: 0 0 10px var(--primary-color);
+    transition: all 0.2s ease;
+    width: 250px;
+    text-align: center;
+    font-family: inherit;
+    text-transform: uppercase;
+}
+
+.btn:active,
+.btn:hover {
+    background: var(--primary-color);
+    color: #000;
+    box-shadow: 0 0 25px var(--primary-color);
+}
+
+.btn-secondary {
+    border-color: var(--secondary-color);
+    color: var(--secondary-color);
+    box-shadow: 0 0 10px var(--secondary-color);
+}
+
+.btn-secondary:hover {
+    background: var(--secondary-color);
+    color: #000;
+    box-shadow: 0 0 25px var(--secondary-color);
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Scanline effect */
+.scanlines {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(to bottom,
+            rgba(255, 255, 255, 0),
+            rgba(255, 255, 255, 0) 50%,
+            rgba(0, 0, 0, 0.1) 50%,
+            rgba(0, 0, 0, 0.1));
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 999;
+}
+
+/* Select Box Styling */
+.menu-group {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+label {
+    color: var(--primary-color);
+    font-family: inherit;
+    font-weight: bold;
+    text-shadow: 0 0 5px var(--primary-color);
+}
+
+.select-box {
+    background: transparent;
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+    padding: 10px 20px;
+    font-size: 1.2rem;
+    font-family: inherit;
+    border-radius: 8px;
+    box-shadow: 0 0 10px var(--primary-color);
+    outline: none;
+    cursor: pointer;
+    text-align: center;
+    width: 250px;
+}
+
+.select-box option {
+    background: #000;
+    color: var(--primary-color);
+}
+
+.select-box:hover,
+.select-box:focus {
+    box-shadow: 0 0 20px var(--primary-color);
+}
+
+@media (max-width: 600px) {
+    .title {
+        font-size: 2.5rem;
+    }
+
+    .btn {
+        padding: 12px 30px;
+        font-size: 1.2rem;
+        width: 220px;
+    }
+
+    .select-box {
+        width: 220px;
+        font-size: 1.1rem;
+    }
+}
+
+/* Difficulty Selector Styling */
+.difficulty-label {
+    color: var(--primary-color);
+    font-weight: bold;
+    text-shadow: 0 0 5px var(--primary-color);
+    margin-bottom: 5px;
+    letter-spacing: 2px;
+}
+
+.difficulty-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    width: 320px;
+    margin-bottom: 20px;
+}
+
+.diff-btn {
+    flex: 1;
+    background: transparent;
+    border: 1px solid #334444;
+    color: #556666;
+    padding: 10px 0;
+    text-align: center;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    font-weight: bold;
+}
+
+.diff-btn:hover {
+    border-color: #556666;
+    color: #889999;
+}
+
+.diff-btn.active {
+    border-color: var(--primary-color);
+    color: #000;
+    background: var(--primary-color);
+    box-shadow: 0 0 15px var(--primary-color);
+    text-shadow: none;
+    transform: scale(1.05);
+}
+
+@media (max-width: 600px) {
+    .difficulty-row {
+        width: 300px;
+    }
+
+    .diff-btn {
+        font-size: 0.8rem;
+        padding: 12px 0;
+    }
+}
+
+/* Lobby Modal Styling */
+.lobby-section {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 250px;
+    margin-bottom: 20px;
+}
+
+#peer-id-input,
+#connect-id-input {
+    background: transparent;
+    border: 1px solid var(--primary-color);
+    color: #fff;
+    padding: 10px;
+    font-size: 1rem;
+    font-family: 'Courier New', Courier, monospace;
+    text-align: center;
+    border-radius: 4px;
+    width: 100%;
+}
+
+.btn-small {
+    padding: 8px 15px;
+    font-size: 0.9rem;
+    width: 100px;
+    margin: 5px auto;
+}
+
+#lobby-status {
+    font-size: 1rem;
+    color: #888;
+}
+
+#connection-status {
+    height: 20px;
+    color: var(--secondary-color);
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+#mode-menu,
+#cpu-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+}
+
+#mode-menu .btn,
+#cpu-menu .btn {
+    margin: 5px 0;
+}
+
+/* Gameplay UI */
+#game-ui {
+    display: flex;
+    gap: 10px;
+}
+
+.icon-btn {
+    background: transparent;
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 0 10px var(--primary-color);
+    pointer-events: auto;
+    /* Re-enable events since ui-layer is none */
+}
+
+.icon-btn:active {
+    background: var(--primary-color);
+    color: #000;
+}
