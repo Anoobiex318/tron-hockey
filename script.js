@@ -729,9 +729,42 @@ function endGame(p1Won) {
         updateHighScoreDisplay();
     }
 
+    // Determine Quit Button Text/Action based on Mode
+    const exitBtn = document.getElementById('game-over-exit-btn');
+    if (exitBtn) {
+        if (state.mode === 'online_host' || state.mode === 'online_client') {
+            exitBtn.textContent = "QUIT LOBBY";
+            exitBtn.onclick = () => quitLobby();
+        } else {
+            exitBtn.textContent = "MAIN MENU";
+            exitBtn.onclick = () => returnToMenu();
+        }
+    }
+
     modal.classList.remove('hidden');
     document.getElementById('game-ui').classList.add('hidden');
 }
+
+window.quitLobby = () => {
+    // 1. Close connection if open
+    if (conn) {
+        conn.close();
+        conn = null;
+    }
+
+    // 2. Clear any Peer ID cache? 
+    // User requested: "delete cache id save during the match on the storage"
+    // Assuming they mean the Host ID or connection state.
+    localStorage.removeItem('tron_hockey_peer_id');
+
+    // 3. Stop Game Loop
+    state.running = false;
+
+    // 4. Force Reload to Main Page (simulating full exit/reset)
+    // This will trigger the "Connection Lost" modal for the other functionality effectively if they are still listening,
+    // but here we are quitting OUR side.
+    window.location.href = window.location.pathname;
+};
 
 window.returnToMenu = () => {
     document.getElementById('game-over-modal').classList.add('hidden');
@@ -744,10 +777,23 @@ window.togglePause = () => {
     const modal = document.getElementById('pause-modal');
     const title = document.getElementById('pause-title');
     const resumeBtn = document.getElementById('resume-btn');
+    const exitBtn = document.getElementById('pause-exit-btn');
 
     if (state.paused) {
         if (title) title.textContent = "PAUSED";
         if (resumeBtn) resumeBtn.style.display = 'block'; // Ensure visible
+
+        // Dynamic Exit Logic
+        if (exitBtn) {
+            if (state.mode === 'online_host' || state.mode === 'online_client') {
+                exitBtn.textContent = "QUIT LOBBY";
+                exitBtn.onclick = () => quitLobby();
+            } else {
+                exitBtn.textContent = "EXIT";
+                exitBtn.onclick = () => stopGame();
+            }
+        }
+
         modal.classList.remove('hidden');
     } else {
         modal.classList.add('hidden');

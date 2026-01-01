@@ -76,7 +76,7 @@
     <div id="game-over-modal" class="menu-overlay hidden">
         <div class="title" id="game-over-title">YOU WIN</div>
         <div class="subtitle" id="game-over-score">7 - 5</div>
-        <button class="btn" onclick="returnToMenu()">MAIN MENU</button>
+        <button id="game-over-exit-btn" class="btn" onclick="returnToMenu()">MAIN MENU</button>
         <button class="btn btn-secondary" onclick="restartGame()">REMATCH</button>
     </div>
 
@@ -107,7 +107,7 @@
     <div id="pause-modal" class="menu-overlay hidden">
         <div id="pause-title" class="title">PAUSED</div>
         <button id="resume-btn" class="btn" onclick="togglePause()">RESUME</button>
-        <button class="btn btn-secondary" onclick="stopGame()">EXIT</button>
+        <button id="pause-exit-btn" class="btn btn-secondary" onclick="stopGame()">EXIT</button>
     </div>
 
     <!-- Install App Modal -->
