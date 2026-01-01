@@ -55,6 +55,16 @@
                 WINS: 0
             </div>
         </div>
+
+        <!-- Gameplay UI (Pause/Flip) -->
+        <div id="game-ui" class="ui-layer hidden">
+            <button id="pause-btn" class="icon-btn" onclick="togglePause()">
+                ||
+            </button>
+            <button id="flip-btn" class="icon-btn" onclick="toggleFlip()">
+                &#8635;
+            </button>
+        </div>
     </div>
 
     <div id="game-over-modal" class="menu-overlay hidden">
@@ -86,17 +96,8 @@
         <button class="btn" onclick="closeLobby()">BACK</button>
     </div>
 
-    <!-- Gameplay UI -->
-    <div id="game-ui" class="ui-layer hidden">
-        <button id="pause-btn" class="icon-btn" onclick="togglePause()">
-            ||
-        </button>
-        <button id="flip-btn" class="icon-btn" onclick="toggleFlip()" style="margin-left: 10px;">
-            &#8635; <!-- Refresh/Rotate Icon -->
-        </button>
-    </div>
-
-    <!-- Pause Menu -->
+    <!-- Pause Menu (This is full screen overlay, can stay out or in, but usually full screen is better out) -->
+    <!-- Actually user complained about pause button positioning, not the menu itself. -->
     <div id="pause-modal" class="menu-overlay hidden">
         <div id="pause-title" class="title">PAUSED</div>
         <button id="resume-btn" class="btn" onclick="togglePause()">RESUME</button>

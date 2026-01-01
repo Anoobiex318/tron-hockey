@@ -73,19 +73,47 @@ function playSound(type) {
 // Resizing
 function resize() {
     const container = document.getElementById('game-container');
+    const oldWidth = canvas.width || 10;
+    const oldHeight = canvas.height || 10;
+
+    // Resize Canvas
     canvas.width = container.clientWidth || window.innerWidth;
     canvas.height = container.clientHeight || window.innerHeight;
 
+    // Calculate Scale Ratios
+    const scaleX = canvas.width / oldWidth;
+    const scaleY = canvas.height / oldHeight;
+
+    // Update State Field Dimensions
     state.field.width = canvas.width;
     state.field.height = canvas.height;
 
+    // Update Config / Radii based on new size
     const scaleBase = Math.min(canvas.width, canvas.height);
     state.p1.radius = scaleBase * CONFIG.paddleRadiusRatio;
     state.p2.radius = scaleBase * CONFIG.paddleRadiusRatio;
     state.puck.radius = scaleBase * CONFIG.puckRadiusRatio;
     state.puck.maxSpeed = canvas.height * CONFIG.puckMaxSpeedMultiplier;
 
-    if (!state.running) resetPositions();
+    // Scale Active Positions if Running
+    if (state.running && oldWidth > 10) {
+        // Simple proportional scaling keeps everything roughly relative
+        state.p1.x *= scaleX;
+        state.p1.y *= scaleY;
+        state.p1.prevX *= scaleX;
+        state.p1.prevY *= scaleY;
+
+        state.p2.x *= scaleX;
+        state.p2.y *= scaleY;
+        state.p2.prevX *= scaleX;
+        state.p2.prevY *= scaleY;
+
+        state.puck.x *= scaleX;
+        state.puck.y *= scaleY;
+    } else {
+        // Not running or first load, hard reset logic usually safer
+        resetPositions();
+    }
 }
 
 function resetPositions() {
@@ -1124,9 +1152,7 @@ window.startGame = (mode) => {
 
     document.getElementById('main-menu').classList.add('hidden');
     document.getElementById('game-ui').classList.remove('hidden');
-    if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(e => console.log(e));
-    }
+
     if (audioCtx.state === 'suspended') audioCtx.resume();
 };
 
