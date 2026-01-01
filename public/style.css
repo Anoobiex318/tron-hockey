@@ -101,6 +101,32 @@ canvas {
     border-radius: 15px;
 }
 
+.info-toggle {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    border: 2px solid #ff3366;
+    color: #ff3366;
+    border-radius: 8px;
+    font-size: 1.5rem;
+    line-height: 36px;
+    text-align: center;
+    cursor: pointer;
+    font-family: monospace;
+    font-weight: bold;
+    box-shadow: 0 0 5px #ff3366;
+    transition: all 0.2s;
+    z-index: 100;
+}
+
+.info-toggle:hover {
+    background: #ff3366;
+    color: #000;
+    box-shadow: 0 0 15px #ff3366;
+}
+
 .subtitle {
     font-size: 1.5rem;
     color: #fff;
@@ -214,18 +240,37 @@ label {
 
 @media (max-width: 600px) {
     .title {
-        font-size: 2.5rem;
+        font-size: 2.2rem;
+    }
+
+    .menu-logo {
+        width: 80px;
+        height: 80px;
+    }
+
+    .subtitle {
+        font-size: 1.2rem;
+        margin-bottom: 25px;
     }
 
     .btn {
-        padding: 12px 30px;
-        font-size: 1.2rem;
-        width: 220px;
+        padding: 10px 25px;
+        font-size: 1.1rem;
+        width: 200px;
     }
 
     .select-box {
-        width: 220px;
-        font-size: 1.1rem;
+        width: 200px;
+        font-size: 1rem;
+    }
+
+    .info-toggle {
+        top: 10px;
+        right: 10px;
+        width: 35px;
+        height: 35px;
+        font-size: 1.2rem;
+        line-height: 31px;
     }
 }
 
@@ -277,12 +322,54 @@ label {
 
 @media (max-width: 600px) {
     .difficulty-row {
-        width: 300px;
+        width: 280px;
+        gap: 8px;
     }
 
     .diff-btn {
-        font-size: 0.8rem;
-        padding: 12px 0;
+        font-size: 0.75rem;
+        padding: 10px 0;
+    }
+}
+
+/* Extra small screens (e.g., Galaxy Fold or small older phones) */
+@media (max-width: 360px) {
+    .title {
+        font-size: 1.8rem;
+    }
+
+    .menu-logo {
+        width: 60px;
+        height: 60px;
+    }
+
+    .subtitle {
+        font-size: 1rem;
+        letter-spacing: 3px;
+        margin-bottom: 15px;
+    }
+
+    .btn {
+        padding: 8px 15px;
+        font-size: 1rem;
+        width: 180px;
+        margin: 5px;
+    }
+
+    .difficulty-row {
+        width: 90%;
+        gap: 5px;
+    }
+
+    .diff-btn {
+        font-size: 0.7rem;
+        padding: 8px 0;
+    }
+
+    .icon-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
     }
 }
 

@@ -1204,6 +1204,10 @@ window.startGame = (mode) => {
     document.getElementById('main-menu').classList.add('hidden');
     document.getElementById('game-ui').classList.remove('hidden');
 
+    if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(e => console.log(e));
+    }
+
     if (audioCtx.state === 'suspended') audioCtx.resume();
 };
 
@@ -1268,6 +1272,17 @@ window.selectDiff = (diff, btn) => {
     const btns = document.querySelectorAll('.diff-btn');
     btns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+};
+
+window.copyToClipboard = (text, label) => {
+    navigator.clipboard.writeText(text).then(() => {
+        // Find or create a temporary toast/feedback if needed, 
+        // but for simplicity we can just alert or update the lobby-status if it's visible.
+        // Let's use a simpler approach: change the button text temporarily.
+        console.log(`${label} copied: ${text}`);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
 };
 
 window.addEventListener('resize', resize);

@@ -25,8 +25,11 @@
         </div>
 
         <div id="main-menu" class="menu-overlay">
+            <div class="info-toggle" onclick="document.getElementById('info-modal').classList.remove('hidden')">?</div>
             <img src="icon.png" class="menu-logo" alt="Logo">
-            <div class="title">TRON<br>HOCKEY</div>
+            <div class="title" style="position: relative;">
+                TRON<br>HOCKEY
+            </div>
             <div class="subtitle">NEON LEAGUE</div>
 
             <!-- Mode Menu -->
@@ -138,6 +141,37 @@
         <button class="btn" onclick="performUpdate()">UPDATE NOW</button>
         <button class="btn btn-secondary"
             onclick="document.getElementById('update-modal').classList.add('hidden')">CANCEL</button>
+    </div>
+
+    <!-- Info/Credits Modal -->
+    <div id="info-modal" class="menu-overlay hidden" style="z-index: 2100; background: rgba(0,0,0,0.95);">
+        <div class="title" style="font-size: 2rem; color: #ffaa00;">About Game</div>
+        <div
+            style="color: #fff; text-align: center; font-family: sans-serif; line-height: 1.6; font-size: 0.9rem; padding: 20px;">
+            <p style="margin-bottom: 15px; color: #bbb;">Created by childish and retro mind of:</p>
+            <p
+                style="font-size: 1.5rem; font-weight: bold; color: #0ff; margin-bottom: 20px; text-shadow: 0 0 10px #0ff, 0 0 20px #0ff;">
+                Mark Darwin C. Villarta
+            </p>
+
+            <p style="margin-bottom: 10px; color: #bbb;">Buy me a coffee (Tap to Copy):</p>
+            <div style="display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 20px;">
+                <div onclick="copyToClipboard('elitepro318@gmail.com', 'PayPal'); this.style.color='#0f0'; setTimeout(()=>this.style.color='#0070ba', 1000)"
+                    style="cursor: pointer; padding: 8px 15px; border: 1px solid #0070ba; color: #0070ba; border-radius: 4px; width: 100%; font-size: 0.8rem; transition: all 0.2s;">
+                    PayPal: elitepro318@gmail.com
+                </div>
+                <div onclick="copyToClipboard('09104049265', 'GCash'); this.style.color='#0f0'; setTimeout(()=>this.style.color='#0057e7', 1000)"
+                    style="cursor: pointer; padding: 8px 15px; border: 1px solid #0057e7; color: #0057e7; border-radius: 4px; width: 100%; font-size: 0.8rem; transition: all 0.2s;">
+                    GCash: 09104049265
+                </div>
+            </div>
+
+            <p style="margin-bottom: 5px; font-style: italic; color: #888;">Inspired by Symbian OS Game:<br>Tron Hockey
+                &#8482</p>
+            <p style="margin-top: 20px; font-size: 0.8rem; color: #555;">All rights reserve 2015</p>
+        </div>
+        <button class="btn btn-secondary"
+            onclick="document.getElementById('info-modal').classList.add('hidden')">CLOSE</button>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>

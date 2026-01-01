@@ -70,4 +70,4 @@ A visually stunning, fast-paced air hockey game built with modern web technologi
 The project includes a build step that **obfuscates** the core game logic (`script.js`) before deployment, protecting your source code from casual inspection.
 
 ---
-*Created with ❤️ by [Your Name/Antigravity]*
+*Created with ❤️ by Anoobiex
