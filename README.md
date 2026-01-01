@@ -1,9 +1,15 @@
-# 🏒 Neon Hockey: Tron Edition
+# 🏒 Tron Hockey
 
 A visually stunning, fast-paced air hockey game built with modern web technologies. Experience the thrill of neon-soaked arcade action right in your browser or installed as a PWA.
 
-![Game Preview](https://via.placeholder.com/800x450?text=Neon+Hockey+Preview) 
-*(Replace this link with a real screenshot of your game!)*
+<p align="center">
+  <img src="./screenshots/1.png" width="45%" alt="Main Menu">
+  <img src="./screenshots/2.png" width="45%" alt="Gameplay">
+</p>
+<p align="center">
+  <img src="./screenshots/3.png" width="45%" alt="Multiplayer Lobby">
+  <img src="./screenshots/4.png" width="45%" alt="Action Shot">
+</p>
 
 ## ✨ Key Features
 
