@@ -381,6 +381,11 @@ function handleData(data) {
 
 // --- Lobby UI Functions ---
 window.openLobby = () => {
+    if (!navigator.onLine) {
+        document.getElementById('offline-modal').classList.remove('hidden');
+        return;
+    }
+
     document.getElementById('main-menu').classList.add('hidden');
     document.getElementById('lobby-modal').classList.remove('hidden');
     initPeer();
@@ -1154,6 +1159,58 @@ window.startGame = (mode) => {
     document.getElementById('game-ui').classList.remove('hidden');
 
     if (audioCtx.state === 'suspended') audioCtx.resume();
+};
+
+
+// --- PWA LOGIC ---
+
+// 1. Install Prompt
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    // Show Install Modal
+    document.getElementById('install-modal').classList.remove('hidden');
+});
+
+document.getElementById('install-btn').addEventListener('click', async () => {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to the install prompt: ${outcome}`);
+        deferredPrompt = null;
+        document.getElementById('install-modal').classList.add('hidden');
+    }
+});
+
+// 2. Update Logic
+window.updateApp = () => {
+    if (!navigator.onLine) {
+        document.getElementById('offline-modal').classList.remove('hidden');
+        return;
+    }
+    // Show confirmation modal instead of alert
+    document.getElementById('update-modal').classList.remove('hidden');
+};
+
+window.performUpdate = async () => {
+    // Hide modal
+    document.getElementById('update-modal').classList.add('hidden');
+
+    if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (let registration of registrations) {
+            await registration.unregister();
+        }
+    }
+
+    // Clear Caches
+    if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(key => caches.delete(key)));
+    }
+
+    window.location.reload(true);
 };
 
 // Difficulty Selection Logic

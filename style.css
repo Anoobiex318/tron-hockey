@@ -93,12 +93,23 @@ canvas {
     letter-spacing: -2px;
 }
 
+.menu-logo {
+    width: 100px;
+    height: 100px;
+    margin-bottom: 0px;
+    filter: drop-shadow(0 0 10px var(--primary-color));
+    border-radius: 15px;
+}
+
 .subtitle {
     font-size: 1.5rem;
     color: #fff;
     margin-bottom: 40px;
     letter-spacing: 5px;
     text-transform: uppercase;
+    text-align: center;
+    padding: 0 20px;
+    /* Prevent touching edges on small screens */
 }
 
 .btn {

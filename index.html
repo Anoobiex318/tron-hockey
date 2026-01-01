@@ -25,6 +25,7 @@
         </div>
 
         <div id="main-menu" class="menu-overlay">
+            <img src="icon.png" class="menu-logo" alt="Logo">
             <div class="title">TRON<br>HOCKEY</div>
             <div class="subtitle">NEON LEAGUE</div>
 
@@ -34,6 +35,11 @@
                 <button class="btn btn-secondary" onclick="startGame('local')">Local (2P)</button>
                 <button class="btn btn-secondary" onclick="openLobby()"
                     style="border-color: #ff3366; color: #ff3366; box-shadow: 0 0 10px #ff3366;">ONLINE 1v1</button>
+
+                <button id="update-app-btn" class="btn btn-secondary" onclick="updateApp()"
+                    style="border-color: #0ff; color: #0ff; margin-top: 15px; font-size: 0.8rem; padding: 10px; width: 150px;">
+                    CHECK UPDATES
+                </button>
             </div>
 
             <!-- CPU Difficulty Menu (Hidden) -->
@@ -104,12 +110,59 @@
         <button class="btn btn-secondary" onclick="stopGame()">EXIT</button>
     </div>
 
+    <!-- Install App Modal -->
+    <div id="install-modal" class="menu-overlay hidden" style="background: rgba(0,0,0,0.9);">
+        <div class="title" style="font-size: 2.5rem;">INSTALL APP</div>
+        <div class="subtitle" style="font-size: 1rem; margin-bottom: 20px; letter-spacing: 2px; line-height: 1.5;">
+            Enter the Grid.<br>Play Offline & Lag-Free.
+        </div>
+        <button id="install-btn" class="btn">INSTALL NOW</button>
+        <button class="btn btn-secondary"
+            onclick="document.getElementById('install-modal').classList.add('hidden')">LATER</button>
+    </div>
+
+    <!-- Offline Warning Modal -->
+    <div id="offline-modal" class="menu-overlay hidden" style="z-index: 2000;">
+        <div class="title" style="color: #ff3366; text-shadow: 0 0 10px #ff3366;">OFFLINE</div>
+        <div class="subtitle" style="font-size: 1rem;">Internet Connection Required</div>
+        <button class="btn" onclick="document.getElementById('offline-modal').classList.add('hidden')">OK</button>
+    </div>
+
+    <!-- Update Confirmation Modal -->
+    <div id="update-modal" class="menu-overlay hidden" style="z-index: 2000;">
+        <div class="title" style="font-size: 2.5rem; color: #0ff;">UPDATE</div>
+        <div class="subtitle"
+            style="font-size: 1rem; margin-bottom: 20px; text-align: center; letter-spacing: 1px; padding: 0 20px;">
+            New version available.<br>Refresh to apply updates?
+        </div>
+        <button class="btn" onclick="performUpdate()">UPDATE NOW</button>
+        <button class="btn btn-secondary"
+            onclick="document.getElementById('update-modal').classList.add('hidden')">CANCEL</button>
+    </div>
+
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="script.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('SW registered!', reg))
+                .then(reg => {
+                    console.log('SW registered!', reg);
+                    // Check for updates
+                    reg.onupdatefound = () => {
+                        const newWorker = reg.installing;
+                        newWorker.onstatechange = () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                // New content available
+                                const updateBtn = document.getElementById('update-app-btn');
+                                if (updateBtn) {
+                                    updateBtn.textContent = "UPDATE AVAILABLE!";
+                                    updateBtn.style.borderColor = "#0f0";
+                                    updateBtn.style.color = "#0f0";
+                                }
+                            }
+                        };
+                    };
+                })
                 .catch(err => console.log('SW failed', err));
         }
     </script>
