@@ -404,9 +404,9 @@ window.showMainMenu = () => {
 
 window.copyPeerId = () => {
     const id = document.getElementById('peer-id-input').value;
-    const url = window.location.origin + window.location.pathname + "?game=" + id;
-    navigator.clipboard.writeText(url).then(() => {
-        document.getElementById('lobby-status').textContent = "Link Copied!";
+    // Just copy the ID as requested
+    navigator.clipboard.writeText(id).then(() => {
+        document.getElementById('lobby-status').textContent = "ID Copied!";
         setTimeout(() => document.getElementById('lobby-status').textContent = "Ready to Connect", 2000);
     });
 };
