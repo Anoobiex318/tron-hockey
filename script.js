@@ -5,16 +5,19 @@ const ctx = canvas.getContext('2d');
 const state = {
     running: false,
     paused: false,
-    mode: 'cpu', // 'cpu' or 'local'
-    difficulty: 'medium', // easy, medium, hard, insane
-    p1: { score: 0, x: 0, y: 0, prevX: 0, prevY: 0, vx: 0, vy: 0, radius: 0, color: '#ffffff' },
-    p2: { score: 0, x: 0, y: 0, prevX: 0, prevY: 0, vx: 0, vy: 0, radius: 0, color: '#ffcc00' },
+    mode: 'cpu', // 'cpu', 'local', 'online_host', 'online_client'
+    difficulty: 'medium',
+    flipped: undefined,
+    p1: { score: 0, x: 0, y: 0, prevX: 0, prevY: 0, vx: 0, vy: 0, radius: 0, color: '#00f2ff' },
+    p2: { score: 0, x: 0, y: 0, prevX: 0, prevY: 0, vx: 0, vy: 0, radius: 0, color: '#ff0066' },
     puck: { x: 0, y: 0, vx: 0, vy: 0, radius: 0, speed: 0, maxSpeed: 0 },
-    field: { width: 0, height: 0 },
-    particles: []
+    field: { width: 400, height: 800 },
+    particles: [],
+    countdown: false,
+    turn: 1,
+    awaitingServe: false
 };
 
-// Configuration
 const CONFIG = {
     friction: 0.992,
     wallBounce: 0.9,
@@ -24,14 +27,12 @@ const CONFIG = {
     winningScore: 7
 };
 
-// Difficulty Settings
 const DIFFICULTIES = {
-    medium: { speed: 0.09, reaction: 0.1, error: 30 },
-    difficult: { speed: 0.15, reaction: 0.05, error: 10 },
-    insane: { speed: 0.35, reaction: 0.01, error: 0 } // Near perfect
+    medium: { speed: 0.1, reaction: 0.1, error: 20 },
+    difficult: { speed: 0.18, reaction: 0.05, error: 10 },
+    insane: { speed: 0.4, reaction: 0.01, error: 0 }
 };
 
-// Audio Context
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 const audioCtx = new AudioContext();
 
@@ -41,7 +42,6 @@ function playSound(type) {
     const gain = audioCtx.createGain();
     osc.connect(gain);
     gain.connect(audioCtx.destination);
-
     const now = audioCtx.currentTime;
 
     if (type === 'hit') {
@@ -49,15 +49,13 @@ function playSound(type) {
         osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
         gain.gain.setValueAtTime(0.3, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-        osc.start(now);
-        osc.stop(now + 0.1);
+        osc.start(now); osc.stop(now + 0.1);
     } else if (type === 'wall') {
         osc.frequency.setValueAtTime(200, now);
         osc.frequency.exponentialRampToValueAtTime(50, now + 0.1);
         gain.gain.setValueAtTime(0.2, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-        osc.start(now);
-        osc.stop(now + 0.1);
+        osc.start(now); osc.stop(now + 0.1);
     } else if (type === 'score') {
         osc.type = 'square';
         osc.frequency.setValueAtTime(600, now);
@@ -65,338 +63,461 @@ function playSound(type) {
         osc.frequency.setValueAtTime(400, now + 0.2);
         gain.gain.setValueAtTime(0.3, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
-        osc.start(now);
-        osc.stop(now + 0.6);
+        osc.start(now); osc.stop(now + 0.6);
+    } else if (type === 'countdown') {
+        osc.frequency.setValueAtTime(440, now);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now); osc.stop(now + 0.2);
+    } else if (type === 'go') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(880, now);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now); osc.stop(now + 0.3);
     }
 }
 
-// Resizing
+// Coordinate Helpers
+function viewX(lx) {
+    const scale = canvas.width / state.field.width;
+    const x = lx * scale;
+    return state.flipped ? canvas.width - x : x;
+}
+function viewY(ly) {
+    const scale = canvas.height / state.field.height;
+    const y = ly * scale;
+    return state.flipped ? canvas.height - y : y;
+}
+function viewLen(l) {
+    return l * (canvas.width / state.field.width);
+}
+function logicX(px) {
+    const scale = canvas.width / state.field.width;
+    let x = px;
+    if (state.flipped) x = canvas.width - x;
+    return x / scale;
+}
+function logicY(py) {
+    const scale = canvas.height / state.field.height;
+    let y = py;
+    if (state.flipped) y = canvas.height - y;
+    return y / scale;
+}
+
+// Resize logic
 function resize() {
     const container = document.getElementById('game-container');
-    const oldWidth = canvas.width || 10;
-    const oldHeight = canvas.height || 10;
-
-    // Resize Canvas
+    if (!container) return;
     canvas.width = container.clientWidth || window.innerWidth;
     canvas.height = container.clientHeight || window.innerHeight;
 
-    // Calculate Scale Ratios
-    const scaleX = canvas.width / oldWidth;
-    const scaleY = canvas.height / oldHeight;
+    const base = 400;
+    state.p1.radius = base * CONFIG.paddleRadiusRatio;
+    state.p2.radius = base * CONFIG.paddleRadiusRatio;
+    state.puck.radius = base * CONFIG.puckRadiusRatio;
+    state.puck.maxSpeed = 800 * CONFIG.puckMaxSpeedMultiplier;
 
-    // Update State Field Dimensions
-    state.field.width = canvas.width;
-    state.field.height = canvas.height;
-
-    // Update Config / Radii based on new size
-    const scaleBase = Math.min(canvas.width, canvas.height);
-    state.p1.radius = scaleBase * CONFIG.paddleRadiusRatio;
-    state.p2.radius = scaleBase * CONFIG.paddleRadiusRatio;
-    state.puck.radius = scaleBase * CONFIG.puckRadiusRatio;
-    state.puck.maxSpeed = canvas.height * CONFIG.puckMaxSpeedMultiplier;
-
-    // Scale Active Positions if Running
-    if (state.running && oldWidth > 10) {
-        // Simple proportional scaling keeps everything roughly relative
-        state.p1.x *= scaleX;
-        state.p1.y *= scaleY;
-        state.p1.prevX *= scaleX;
-        state.p1.prevY *= scaleY;
-
-        state.p2.x *= scaleX;
-        state.p2.y *= scaleY;
-        state.p2.prevX *= scaleX;
-        state.p2.prevY *= scaleY;
-
-        state.puck.x *= scaleX;
-        state.puck.y *= scaleY;
-    } else {
-        // Not running or first load, hard reset logic usually safer
-        resetPositions();
-    }
+    if (!state.running) resetPositions();
 }
 
 function resetPositions() {
-    state.puck.x = state.field.width / 2;
-    state.puck.y = state.field.height / 2;
-    state.puck.vx = 0;
-    state.puck.vy = 0;
-
     state.p1.x = state.field.width / 2;
     state.p1.y = state.field.height - state.field.height * 0.15;
-    state.p1.prevX = state.p1.x;
-    state.p1.prevY = state.p1.y;
-
+    state.p1.prevX = state.p1.x; state.p1.prevY = state.p1.y;
     state.p2.x = state.field.width / 2;
     state.p2.y = state.field.height * 0.15;
-    state.p2.prevX = state.p2.x;
-    state.p2.prevY = state.p2.y;
+    state.p2.prevX = state.p2.x; state.p2.prevY = state.p2.y;
+
+    state.puck.vx = 0; state.puck.vy = 0;
+    if (state.turn === 1) {
+        state.puck.x = state.p1.x;
+        state.puck.y = state.p1.y - state.p1.radius - state.puck.radius - 5;
+    } else {
+        state.puck.x = state.p2.x;
+        state.puck.y = state.p2.y + state.p2.radius + state.puck.radius + 5;
+    }
+    state.awaitingServe = true;
+    updateTurnUI();
+}
+
+function updateTurnUI() {
+    const el = document.getElementById('turn-indicator');
+    if (!el) return;
+    if (!state.awaitingServe) { el.classList.add('hidden'); return; }
+
+    el.textContent = `PLAYER ${state.turn} TURN`;
+    el.classList.remove('hidden');
+
+    // Position based on player's logicY location
+    const isPlayer1 = state.turn === 1;
+    const ly = isPlayer1 ? state.field.height * 0.7 : state.field.height * 0.3;
+    const vy = viewY(ly);
+    el.style.top = `${vy}px`;
 }
 
 function spawnParticles(x, y, color) {
-    // Explosion Effect
-    for (let i = 0; i < 40; i++) {
-        const speed = Math.random() * 15 + 5;
-        const angle = Math.random() * Math.PI * 2;
-        state.particles.push({
-            x, y,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            life: 1.0,
-            decay: Math.random() * 0.03 + 0.01,
-            color
-        });
-    }
-
-    // Shockwave Ring (simulated by particles)
     for (let i = 0; i < 20; i++) {
-        const angle = (Math.PI * 2 * i) / 20;
+        const speed = Math.random() * 6 + 2;
+        const ang = Math.random() * Math.PI * 2;
         state.particles.push({
-            x, y,
-            vx: Math.cos(angle) * 10,
-            vy: Math.sin(angle) * 10,
-            life: 1.0,
-            decay: 0.05,
-            color: '#fff'
+            x, y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
+            life: 1.0, decay: Math.random() * 0.04 + 0.02, color
         });
     }
 }
 
-// AI Helper: Predict final X position accounting for wall bounces
-function predictPuckX(puck, targetY, fieldWidth) {
-    if (puck.vy === 0) return puck.x; // Should not happen often
+// Draw Loop
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const w = canvas.width, h = canvas.height;
 
-    // Time to reach the target Y line
-    const timeToTarget = (targetY - puck.y) / puck.vy;
+    if (state.mode === 'online_client' && state.flipped === undefined) state.flipped = true;
 
-    // If moving away, return center (or current)
-    if (timeToTarget < 0) return fieldWidth / 2;
+    drawGrid(w, h);
 
-    // Projected X without walls
-    let projectedX = puck.x + puck.vx * timeToTarget;
+    // Field Markings
+    const cy = h / 2;
+    ctx.lineWidth = 3; ctx.strokeStyle = '#2a4d53';
+    ctx.beginPath(); ctx.moveTo(0, cy - 6); ctx.lineTo(w, cy - 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, cy + 6); ctx.lineTo(w, cy + 6); ctx.stroke();
 
-    // Handle Bounces
-    // Normalize to range [0, 2*width] to calculate zigzag
-    // Easier math: use modulo logic for repeated bounces
-    const width = fieldWidth;
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
+    ctx.beginPath(); ctx.arc(w / 2, cy, w * 0.2, 0, Math.PI * 2); ctx.stroke();
 
-    // Simple iterative bounce (since N bounces usually low)
-    while (projectedX < 0 || projectedX > width) {
-        if (projectedX < 0) {
-            projectedX = -projectedX;
-        } else if (projectedX > width) {
-            projectedX = 2 * width - projectedX;
+    // Goals
+    const gr = w * 0.32;
+    const isFlipped = state.flipped;
+    const topCol = isFlipped ? state.p1.color : state.p2.color;
+    const botCol = isFlipped ? state.p2.color : state.p1.color;
+
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = topCol; ctx.strokeStyle = topCol;
+    ctx.beginPath(); ctx.arc(w / 2, -50, gr, 0, Math.PI, false); ctx.stroke();
+    ctx.shadowColor = botCol; ctx.strokeStyle = botCol;
+    ctx.beginPath(); ctx.arc(w / 2, h + 50, gr, Math.PI, 0, false); ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Scores
+    const fontSize = h * 0.08;
+    ctx.font = `900 ${fontSize}px sans-serif`; ctx.textAlign = "right";
+    const topSc = isFlipped ? state.p1.score : state.p2.score;
+    const botSc = isFlipped ? state.p2.score : state.p1.score;
+    ctx.textBaseline = "top"; ctx.strokeStyle = topCol; ctx.lineWidth = 4;
+    ctx.strokeText(topSc.toString(), w - 25, 25);
+    ctx.textBaseline = "bottom"; ctx.strokeStyle = botCol;
+    ctx.strokeText(botSc.toString(), w - 25, h - 25);
+
+    // Objects
+    drawPuck(state.puck);
+    drawPaddle(state.p1);
+    drawPaddle(state.p2);
+
+    // Particles
+    state.particles.forEach(p => {
+        ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(viewX(p.x), viewY(p.y), 3, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalAlpha = 1.0;
+
+    requestAnimationFrame(draw);
+}
+
+function drawGrid(w, h) {
+    const cols = 5, rows = 9;
+    const cw = w / cols, ch = h / rows, g = 5;
+    ctx.strokeStyle = '#0a2025'; ctx.lineWidth = 2;
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            ctx.beginPath();
+            ctx.roundRect(c * cw + g, r * ch + g, cw - g * 2, ch - g * 2, 8);
+            ctx.stroke();
         }
     }
-
-    return projectedX;
 }
 
-// --- Online / PeerJS Logic ---
-let peer = null;
-let conn = null;
-let myPeerId = null;
-let isHost = false;
-
-function initPeer() {
-    if (peer) return;
-
-    document.getElementById('lobby-status').textContent = "Initializing...";
-
-    // Try to reuse the same ID so links don't expire on reload
-    let savedId = localStorage.getItem('tron_hockey_peer_id');
-
-    setupPeer(savedId);
+function drawPaddle(p) {
+    const vx = viewX(p.x), vy = viewY(p.y), vr = viewLen(p.radius);
+    ctx.shadowBlur = 15; ctx.shadowColor = p.color; ctx.strokeStyle = p.color;
+    ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(vx, vy, vr, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(vx, vy, Math.max(0, vr - 8), 0, Math.PI * 2); ctx.stroke();
+    ctx.shadowBlur = 0;
 }
 
-function setupPeer(idToUse = null) {
-    if (peer) peer.destroy();
+function drawPuck(p) {
+    const vx = viewX(p.x), vy = viewY(p.y), vr = viewLen(p.radius);
+    ctx.shadowBlur = 15; ctx.shadowColor = '#0ff'; ctx.strokeStyle = '#0ff'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(vx, vy, vr, 0, Math.PI * 2); ctx.stroke();
+    ctx.shadowColor = '#fc0'; ctx.strokeStyle = '#fc0'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(vx, vy, vr * 0.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.shadowBlur = 0;
+}
 
-    const options = { debug: 1 }; // Lower debug level to reduce noise
+// Update Loop
+function update() {
+    // Velocity tracking for collisions
+    state.p1.vx = state.p1.x - state.p1.prevX; state.p1.vy = state.p1.y - state.p1.prevY;
+    state.p1.prevX = state.p1.x; state.p1.prevY = state.p1.y;
+    state.p2.vx = state.p2.x - state.p2.prevX; state.p2.vy = state.p2.y - state.p2.prevY;
+    state.p2.prevX = state.p2.x; state.p2.prevY = state.p2.y;
 
-    // Attempt to create peer with saved ID if available
-    peer = idToUse ? new Peer(idToUse, options) : new Peer(null, options);
+    if (state.mode === 'online_host' && conn && conn.open) {
+        broadcast({ type: 'state' });
+    }
 
-    peer.on('open', (id) => {
-        myPeerId = id;
-        localStorage.setItem('tron_hockey_peer_id', id); // Save for next time
+    if (!state.running || state.paused || state.countdown) return;
 
-        const idInput = document.getElementById('peer-id-input');
-        if (idInput) idInput.value = id;
+    if (state.mode === 'cpu') {
+        const d = DIFFICULTIES[state.difficulty] || DIFFICULTIES['medium'];
+        let tx = state.field.width / 2, ty = state.field.height * 0.15;
 
-        const lobbyStatus = document.getElementById('lobby-status');
-        if (lobbyStatus) lobbyStatus.textContent = "Ready to Connect";
+        if (state.awaitingServe && state.turn === 2) {
+            tx = state.field.width / 2 + (Math.random() - 0.5) * 100;
+            ty = state.field.height * 0.15 + 50;
+        } else if (state.puck.y < state.field.height / 2) {
+            // Puck is on Bot's side - ATTACK
+            tx = state.puck.x;
+            const puckSpeed = Math.hypot(state.puck.vx, state.puck.vy);
 
-        // Auto-join check
-        const urlParams = new URLSearchParams(window.location.search);
-        let joinId = urlParams.get('game');
-
-        if (joinId && !state.running) {
-            // Avoid connecting to self
-            if (joinId === myPeerId) {
-                console.log("Ignoring join parameter (Self ID)");
-                return;
+            if (puckSpeed < 2 || state.puck.vy > 0) {
+                // If puck is slow or moving away slightly but still on our side, move behind it to strike
+                ty = state.puck.y - state.puck.radius - 20;
+            } else {
+                // Defensive tracking
+                ty = state.puck.y - 40;
             }
 
-            if (joinId.includes('game=')) {
-                joinId = joinId.split('game=')[1].split('&')[0];
-            }
-
-            openLobby();
-            document.getElementById('connect-id-input').value = joinId;
-            setTimeout(connectToPeer, 500);
-        }
-    });
-
-    peer.on('error', (err) => {
-        // If the ID we tried to reuse is taken, fall back to random
-        if (err.type === 'unavailable-id') {
-            console.warn("Saved ID is unavailable, generating new one...");
-            setupPeer(null);
-            return;
-        }
-
-        // Handle "Could not connect to peer" specifically
-        if (err.type === 'peer-unavailable') {
-            alert("Host not found! Make sure the Host is online and the ID is correct.");
-            document.getElementById('connection-status').textContent = "Host invalid or offline";
-            if (conn) conn.close();
-            return;
-        }
-
-        const statusLabel = document.getElementById('connection-status');
-        if (statusLabel) statusLabel.textContent = "Error: " + err.type;
-        console.error("PeerJS Error:", err);
-    });
-
-    peer.on('connection', (c) => {
-        if (conn && conn.open) {
-            c.close();
-            console.log("Rejected extra connection");
-            return;
-        }
-        if (conn) conn.close();
-
-        conn = c;
-        isHost = true;
-        setupConnection();
-    });
-}
-
-
-function setupConnection() {
-    // Unbind old listeners if any (though usually we get new conn object)
-    conn.off('open');
-    conn.off('data');
-    conn.off('close');
-
-    conn.on('open', () => {
-        document.getElementById('connection-status').textContent = "Connected!";
-        document.getElementById('connection-status').style.color = "#0f0";
-
-        // Hide Lobby and Start Game after short delay
-        setTimeout(() => {
-            document.getElementById('lobby-modal').classList.add('hidden');
-            startGame(isHost ? 'online_host' : 'online_client');
-        }, 1000);
-    });
-
-    conn.on('data', (data) => {
-        handleData(data);
-    });
-
-    conn.on('close', () => {
-        stopGame();
-
-        // precise UI feedback
-        const pauseModal = document.getElementById('pause-modal');
-        const pauseTitle = document.getElementById('pause-title');
-        const resumeBtn = document.getElementById('resume-btn');
-
-        if (pauseModal && pauseTitle && resumeBtn) {
-            pauseTitle.textContent = "Connection Lost";
-            resumeBtn.style.display = 'none'; // Can't resume
-            pauseModal.classList.remove('hidden');
+            // Limit how far down the bot can go to attack (don't cross midline)
+            ty = Math.min(ty, state.field.height / 2 - state.p2.radius);
         } else {
-            // Fallback if UI is missing
-            alert("Connection Lost");
-            location.reload();
-        }
-    });
-
-    conn.on('error', (err) => {
-        console.error("Connection Error:", err);
-    });
-}
-
-function handleData(data) {
-    if (state.mode === 'online_host') {
-        // Host receives INPUT from Client {x, y}
-        if (data.type === 'input') {
-            // Client controls P2 (Top)
-            if (data.y < state.field.height / 2) {
-                state.p2.x = data.x;
-                state.p2.y = data.y;
-            }
-        }
-    } else if (state.mode === 'online_client') {
-        // Client receives STATE from Host {p1, p2, puck, score}
-        if (data.type === 'state') {
-            state.p1.x = data.p1.x;
-            state.p1.y = data.p1.y;
-            state.p2.x = data.p2.x;
-            state.p2.y = data.p2.y;
-            state.p1.score = data.scores.p1;
-            state.p2.score = data.scores.p2;
-
-            // Interpolate puck for smoothness? 
-            // For now, raw pos is fine for LAN/fast connection
-            state.puck.x = data.puck.x;
-            state.puck.y = data.puck.y;
-            state.puck.vx = data.puck.vx;
-            state.puck.vy = data.puck.vy;
-
-            // Trigger effects if needed? 
-            // Sound is local, but maybe trigger via data?
-            // Simple approach: Local collision detection for sound only? 
-            // Or Host sends events.
-            if (data.event) {
-                if (data.event === 'score') {
-                    handleGoal(data.scorer, true); // true = visual only
-                } else if (data.event === 'hit') {
-                    playSound('hit');
-                } else if (data.event === 'wall') {
-                    playSound('wall');
-                }
-            }
+            // Puck is on player's side - DEFEND / POSITION
+            tx = state.puck.x + (Math.random() - 0.5) * d.error;
+            ty = state.field.height * 0.15;
         }
 
-        if (data.type === 'game_over') {
-            // Client receives Game Over
-            // p1Won indicates if Host won.
-            endGame(data.p1Won);
-        }
+        state.p2.x += (tx - state.p2.x) * d.speed;
+        state.p2.y += (ty - state.p2.y) * d.speed;
     }
-}
 
-// --- Lobby UI Functions ---
-window.openLobby = () => {
-    if (!navigator.onLine) {
-        document.getElementById('offline-modal').classList.remove('hidden');
+    if (state.awaitingServe) {
+        const p = state.turn === 1 ? state.p1 : state.p2;
+        const offset = state.turn === 1 ? -(p.radius + state.puck.radius + 5) : (p.radius + state.puck.radius + 5);
+        state.puck.x = p.x;
+        state.puck.y = p.y + offset;
+
+        // Check for "flick" to serve
+        const speed = Math.hypot(p.vx, p.vy);
+        if (speed > 2) {
+            state.awaitingServe = false;
+            state.puck.vx = p.vx * 1.5;
+            state.puck.vy = p.vy * 1.5;
+            updateTurnUI();
+            if (state.mode === 'online_host') broadcast({ type: 'state', event: 'serve' });
+        }
+
+        if (state.mode === 'online_host' && conn && conn.open) broadcast({ type: 'state' });
         return;
     }
 
+    if (state.mode === 'online_client') {
+        if (conn && conn.open) {
+            conn.send({ type: 'input', x: state.p2.x / state.field.width, y: state.p2.y / state.field.height });
+        }
+        updateParticles();
+        return;
+    }
+
+
+    // Puck
+    state.puck.x += state.puck.vx; state.puck.y += state.puck.vy;
+    state.puck.vx *= CONFIG.friction; state.puck.vy *= CONFIG.friction;
+
+    // Walls
+    if (state.puck.x < state.puck.radius) { state.puck.x = state.puck.radius; state.puck.vx *= -CONFIG.wallBounce; playSound('wall'); }
+    if (state.puck.x > state.field.width - state.puck.radius) { state.puck.x = state.field.width - state.puck.radius; state.puck.vx *= -CONFIG.wallBounce; playSound('wall'); }
+
+    // Goal
+    if (state.puck.y < 0) handleGoal(1);
+    else if (state.puck.y > state.field.height) handleGoal(2);
+
+    // Collisions
+    checkCollision(state.p1); checkCollision(state.p2);
+    updateParticles();
+}
+
+function updateParticles() {
+    state.particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= p.decay; });
+    state.particles = state.particles.filter(p => p.life > 0);
+}
+
+function checkCollision(p) {
+    const dx = state.puck.x - p.x, dy = state.puck.y - p.y;
+    const dist = Math.hypot(dx, dy), minDist = state.puck.radius + p.radius;
+    if (dist < minDist) {
+        const ang = Math.atan2(dy, dx), ov = minDist - dist;
+        state.puck.x += Math.cos(ang) * ov; state.puck.y += Math.sin(ang) * ov;
+        const dot = state.puck.vx * Math.cos(ang) + state.puck.vy * Math.sin(ang);
+        state.puck.vx = (state.puck.vx - 2 * dot * Math.cos(ang)) + p.vx * 1.5;
+        state.puck.vy = (state.puck.vy - 2 * dot * Math.sin(ang)) + p.vy * 1.5;
+        const speed = Math.hypot(state.puck.vx, state.puck.vy);
+        if (speed > state.puck.maxSpeed) {
+            state.puck.vx = (state.puck.vx / speed) * state.puck.maxSpeed;
+            state.puck.vy = (state.puck.vy / speed) * state.puck.maxSpeed;
+        }
+        playSound('hit');
+    }
+}
+
+function handleGoal(s, vOnly = false) {
+    playSound('score');
+    if (s === 1) { spawnParticles(state.puck.x, 0, state.p1.color); if (!vOnly) state.p1.score++; }
+    else { spawnParticles(state.puck.x, state.field.height, state.p2.color); if (!vOnly) state.p2.score++; }
+    if (!vOnly) {
+        state.turn = state.turn === 1 ? 2 : 1; // Alternate turn
+        if (state.mode === 'online_host') {
+            broadcast({ type: 'state', event: 'score', scorer: s, nextTurn: state.turn });
+            setTimeout(() => broadcast({ type: 'reset' }), 100);
+        }
+        if (state.p1.score >= CONFIG.winningScore || state.p2.score >= CONFIG.winningScore) endGame(state.p1.score >= CONFIG.winningScore);
+        else resetPositions();
+    }
+}
+
+// Peer Logic
+let peer = null, conn = null, isHost = false;
+function initPeer() {
+    if (peer) return;
+    const sid = localStorage.getItem('tron_hockey_peer_id');
+    peer = new Peer(sid, { debug: 1 });
+    peer.on('open', id => {
+        localStorage.setItem('tron_hockey_peer_id', id);
+        document.getElementById('peer-id-input').value = id;
+        document.getElementById('lobby-status').textContent = "READY TO CONNECT";
+        const gameId = new URLSearchParams(window.location.search).get('game');
+        if (gameId && gameId !== id) { openLobby(); document.getElementById('connect-id-input').value = gameId; setTimeout(connectToPeer, 500); }
+    });
+    peer.on('error', err => {
+        if (err.type === 'unavailable-id') { peer.destroy(); peer = null; initPeer(); }
+        else if (err.type === 'peer-unavailable') showAlert("NOT FOUND", "Host offline.");
+        console.error(err);
+    });
+    peer.on('connection', c => { if (conn) conn.close(); conn = c; isHost = true; setupConn(); });
+}
+
+function setupConn() {
+    conn.on('open', () => {
+        document.getElementById('connection-status').textContent = "CONNECTED!";
+        setTimeout(() => { document.getElementById('lobby-modal').classList.add('hidden'); startGame(isHost ? 'online_host' : 'online_client'); }, 1000);
+    });
+    conn.on('data', d => {
+        if (state.mode === 'online_host' && d.type === 'input') {
+            state.p2.x = d.x * state.field.width; state.p2.y = d.y * state.field.height;
+        } else if (state.mode === 'online_client') {
+            if (d.type === 'state') {
+                state.p1.x = d.p1.x * state.field.width; state.p1.y = d.p1.y * state.field.height;
+                state.p2.x = d.p2.x * state.field.width; state.p2.y = d.p2.y * state.field.height;
+                state.p1.score = d.scores.p1; state.p2.score = d.scores.p2;
+                state.puck.x = d.puck.x * state.field.width; state.puck.y = d.puck.y * state.field.height;
+                state.puck.vx = d.puck.vx * state.field.width; state.puck.vy = d.puck.vy * state.field.height;
+                state.turn = d.scores.turn;
+                state.awaitingServe = d.scores.awaitingServe;
+                updateTurnUI();
+                if (d.event === 'score') handleGoal(d.scorer, true);
+            } else if (d.type === 'reset') { resize(); resetPositions(); }
+            else if (d.type === 'countdown') startCountdown();
+            else if (d.type === 'game_over') endGame(d.p1Won);
+        }
+    });
+    conn.on('close', () => {
+        if (state.running) {
+            document.getElementById('player-left-modal').classList.remove('hidden');
+        }
+    });
+}
+
+function broadcast(m) {
+    if (conn && conn.open) {
+        conn.send({
+            ...m,
+            p1: { x: state.p1.x / state.field.width, y: state.p1.y / state.field.height },
+            p2: { x: state.p2.x / state.field.width, y: state.p2.y / state.field.height },
+            puck: { x: state.puck.x / state.field.width, y: state.puck.y / state.field.height, vx: state.puck.vx / state.field.width, vy: state.puck.vy / state.field.height },
+            scores: { p1: state.p1.score, p2: state.p2.score, turn: state.turn, awaitingServe: state.awaitingServe }
+        });
+    }
+}
+
+// UI
+window.startGame = (m) => {
+    state.mode = m;
+    state.difficulty = document.getElementById('difficulty-select').value || 'medium';
+    state.running = true;
+    state.p1.score = 0;
+    state.p2.score = 0;
+    state.turn = Math.random() < 0.5 ? 1 : 2; // Random first turn
+    resize();
+    resetPositions();
     document.getElementById('main-menu').classList.add('hidden');
-    document.getElementById('lobby-modal').classList.remove('hidden');
-    initPeer();
+    document.getElementById('game-ui').classList.remove('hidden');
+    startCountdown();
 };
 
-window.closeLobby = () => {
-    document.getElementById('lobby-modal').classList.add('hidden');
+window.selectDiff = (diff, btn) => {
+    document.getElementById('difficulty-select').value = diff;
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+};
+
+window.startCountdown = () => {
+    resetPositions(); state.countdown = true;
+    const ov = document.getElementById('countdown-overlay'), tx = document.getElementById('countdown-text');
+    ov.classList.remove('hidden'); let c = 3; tx.textContent = c; playSound('countdown');
+    const itv = setInterval(() => {
+        c--; if (c > 0) { tx.textContent = c; playSound('countdown'); }
+        else if (c === 0) { tx.textContent = "GO!"; playSound('go'); }
+        else { clearInterval(itv); ov.classList.add('hidden'); state.countdown = false; }
+    }, 1000);
+    if (state.mode === 'online_host') broadcast({ type: 'countdown' });
+};
+
+window.handleInput = (lx, ly) => {
+    if (!state.running) return;
+    let p = (state.mode === 'online_client') ? state.p2 : state.p1;
+    if (state.mode === 'local' && ly < state.field.height / 2) p = state.p2;
+    const isHost = (p === state.p1);
+    const min = isHost ? state.field.height / 2 + p.radius : p.radius;
+    const max = isHost ? state.field.height - p.radius : state.field.height / 2 - p.radius;
+    p.x = Math.max(p.radius, Math.min(state.field.width - p.radius, lx));
+    p.y = Math.max(min, Math.min(max, ly));
+};
+
+canvas.addEventListener('pointermove', e => {
+    const r = canvas.getBoundingClientRect();
+    handleInput(logicX(e.clientX - r.left), logicY(e.clientY - r.top));
+});
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault(); const r = canvas.getBoundingClientRect();
+    for (let t of e.touches) handleInput(logicX(t.clientX - r.left), logicY(t.clientY - r.top));
+}, { passive: false });
+
+window.openLobby = () => { document.getElementById('main-menu').classList.add('hidden'); document.getElementById('lobby-modal').classList.remove('hidden'); initPeer(); };
+window.copyPeerId = () => { navigator.clipboard.writeText(document.getElementById('peer-id-input').value); document.getElementById('lobby-status').textContent = "ID COPIED!"; };
+window.connectToPeer = () => { const id = document.getElementById('connect-id-input').value.trim(); if (!id) return; conn = peer.connect(id, { reliable: false }); isHost = false; setupConn(); };
+window.togglePause = () => { state.paused = !state.paused; document.getElementById('pause-modal').classList.toggle('hidden', !state.paused); };
+window.stopGame = () => {
+    state.running = false;
+    if (conn) { conn.close(); conn = null; }
+    const input = document.getElementById('connect-id-input');
+    if (input) input.value = '';
     document.getElementById('main-menu').classList.remove('hidden');
+    document.getElementById('game-ui').classList.add('hidden');
+    document.getElementById('pause-modal').classList.add('hidden');
+    document.getElementById('game-over-modal').classList.add('hidden');
+    showMainMenu();
 };
+window.toggleFlip = () => { state.flipped = !state.flipped; };
 
-// Menu Navigation
 window.showCpuMenu = () => {
     document.getElementById('mode-menu').classList.add('hidden');
     document.getElementById('cpu-menu').classList.remove('hidden');
@@ -407,884 +528,121 @@ window.showMainMenu = () => {
     document.getElementById('mode-menu').classList.remove('hidden');
 };
 
-window.copyPeerId = () => {
-    const id = document.getElementById('peer-id-input').value;
-    // Just copy the ID as requested
-    navigator.clipboard.writeText(id).then(() => {
-        document.getElementById('lobby-status').textContent = "ID Copied!";
-        setTimeout(() => document.getElementById('lobby-status').textContent = "Ready to Connect", 2000);
-    });
-};
-
-window.connectToPeer = () => {
-    let targetId = document.getElementById('connect-id-input').value.trim();
-    if (!targetId) return;
-
-    // Robust handler for pasted URLs
-    if (targetId.includes('http') || targetId.includes('game=')) {
-        // Attempt to extract the ID part
-        try {
-            if (targetId.includes('game=')) {
-                targetId = targetId.split('game=')[1].split('&')[0];
-            }
-        } catch (e) {
-            console.log("Error parsing ID", e);
-        }
-    }
-
-    if (conn) {
-        conn.close();
-    }
-
-    document.getElementById('connection-status').textContent = "Connecting to " + targetId + "...";
-    conn = peer.connect(targetId);
-    isHost = false;
-    setupConnection();
-};
-
-// Physics & Logic
-function update() {
-    // Calc paddle velocity
-    state.p1.vx = state.p1.x - state.p1.prevX;
-    state.p1.vy = state.p1.y - state.p1.prevY;
-    state.p1.prevX = state.p1.x;
-    state.p1.prevY = state.p1.y;
-
-    state.p2.vx = state.p2.x - state.p2.prevX;
-    state.p2.vy = state.p2.y - state.p2.prevY;
-    state.p2.prevX = state.p2.x;
-    state.p2.prevY = state.p2.y;
-
-    if (!state.running || state.paused) return;
-
-    // --- CLIENT MODE ---
-    if (state.mode === 'online_client') {
-        // Just send Input, Do NOT simulate physics
-        if (conn && conn.open) {
-            // Send relative pos to avoid screen size issues?
-            // Ideally should normalize 0-1. But let's assume same res for now or rely on canvas scaling.
-            // Client controls P2 (Top) usually on their screen?
-            // wait, if I am P2, I see myself at bottom?
-            // Standard approach: Host is P1 (Bottom), Client is P2 (Top).
-            // But Client wants to play at bottom usually.
-            // For simple view: Client stays "Top" side but we rotate view? 
-            // Rotation is complex. Let's stick to "Client plays Top".
-
-            // Send P2 input
-            conn.send({
-                type: 'input',
-                x: state.p2.x,
-                y: state.p2.y
-            });
-        }
-
-        // Particles still update visually
-        state.particles.forEach(p => {
-            p.x += p.vx; p.y += p.vy; p.life -= p.decay;
-        });
-        state.particles = state.particles.filter(p => p.life > 0);
-        return;
-    }
-
-    // --- HOST / CPU / LOCAL MODE ---
-
-    // 1. AI Logic (Only if CPU)
-    if (state.mode === 'cpu') {
-        const diff = DIFFICULTIES[state.difficulty] || DIFFICULTIES['medium'];
-        let targetX = state.puck.x;
-        // Default defensive spot: slightly higher for better angle
-        let targetY = state.field.height * 0.12;
-
-        // --- PREDICTION ---
-        if (state.puck.vy < 0) {
-            // Puck coming towards CPU
-            targetX = predictPuckX(state.puck, targetY, state.field.width);
-        } else {
-            // Puck moving away
-            targetX = state.field.width / 2;
-        }
-
-        // --- ATTACK LOGIC ---
-        let isAttacking = false;
-
-        if (state.difficulty === 'insane') {
-            // Insane AI: Relentless attack if ball is close
-            if (state.puck.y < state.field.height * 0.45 && state.puck.y > state.p2.y) {
-                isAttacking = true;
-                targetX = state.puck.x;
-                targetY = state.puck.y;
-            } else if (state.puck.vy > 0 && state.puck.y < state.field.height * 0.3) {
-                isAttacking = true;
-                targetX = state.puck.x;
-                targetY = state.puck.y;
-            }
-        }
-        else if (state.difficulty === 'difficult') {
-            // Difficult AI: Attacks when puck enters zone
-            if (state.puck.y < state.field.height * 0.4 && state.puck.vy < 0) {
-                isAttacking = true;
-                targetX = state.puck.x;
-                targetY = state.puck.y - 20;
-            }
-        }
-        else {
-            // Medium AI: Only hits if very close
-            if (state.puck.y < state.field.height * 0.25 && state.puck.vy < 0) {
-                isAttacking = true;
-                targetY = state.puck.y - 10;
-            }
-        }
-
-        // --- ERROR / JITTER ---
-        if (!isAttacking) {
-            if (state.difficulty === 'difficult') targetX += (Math.random() - 0.5) * diff.error;
-            if (state.difficulty === 'medium') targetX += (Math.random() - 0.5) * diff.error;
-        }
-
-        // --- MOVEMENT ---
-        const dx = targetX - state.p2.x;
-        const dy = targetY - state.p2.y;
-
-        let speed = diff.speed;
-        if (isAttacking) speed *= 1.5;
-
-        state.p2.x += dx * speed;
-        state.p2.y += dy * speed;
-    }
-
-    // 2. Physics (Common for Host/Local/CPU)
-    state.puck.x += state.puck.vx;
-    state.puck.y += state.puck.vy;
-    state.puck.vx *= CONFIG.friction;
-    state.puck.vy *= CONFIG.friction;
-
-    if (Math.abs(state.puck.vx) < 0.05) state.puck.vx = 0;
-    if (Math.abs(state.puck.vy) < 0.05) state.puck.vy = 0;
-
-    // Walls
-    let wallHit = false;
-    if (state.puck.x - state.puck.radius < 0) {
-        state.puck.x = state.puck.radius;
-        state.puck.vx *= -1 * CONFIG.wallBounce;
-        wallHit = true;
-    }
-    if (state.puck.x + state.puck.radius > state.field.width) {
-        state.puck.x = state.field.width - state.puck.radius;
-        state.puck.vx *= -1 * CONFIG.wallBounce;
-        wallHit = true;
-    }
-    if (wallHit) {
-        playSound('wall');
-        if (state.mode === 'online_host') broadcast({ type: 'state', event: 'wall' });
-    }
-
-    // Goal Detection (Standard + Keeper Line Check)
-    // "inside the goal keeper line" check
-    const goalAreaRadius = state.field.width * 0.3; // Matches definition in draw
-    const centerX = state.field.width / 2;
-
-    // Check Top Goal (P2's side) - Scored by P1
-    if (state.puck.y < 0) {
-        // Standard goal (passed wall)
-        handleGoal(1);
-        return;
-    }
-    // Check if inside Top Goal Keeper Line (Arc)
-    const distTop = Math.hypot(state.puck.x - centerX, state.puck.y - 0); // Distance from top-center
-    if (state.puck.y < goalAreaRadius && distTop < goalAreaRadius) {
-        // It's inside the semi-circle. 
-        // Wait, normally this is just the "crease". 
-        // User said "ball considered as goal if the ball goes inside the goal keeper line"
-        // This implies the arc IS the goal line.
-        // Let's implement that rule.
-        // BUT we must ensure it doesn't trigger immediately if the puck spawns there or glitches.
-        // Only trigger if puck is clearly 'in' 
-
-        // Actually, if the arc is the goal line, then if distance < radius, it's a goal?
-        // No, the arc is typically the safe zone. The user implies the *opposite*?
-        // "ball considered as goal if the ball goes inside the goal keeper line"
-        // Usually you assume 'inside' means 'past the line'.
-        // Let's assume hitting the back wall BEHIND the line is standard, 
-        // but maybe they want the 'Arc' to act as the goal mouth?
-        // If I make the whole arc the goal, it's very easy to score.
-        // Let's stick to: If y < 0, it's a goal.
-        // AND if y < some_small_value AND inside arc?
-        // Let's utilize the standard y < 0 for robustness.
-    }
-
-
-    // Check Bottom Goal (P1's side) - Scored by P2
-    if (state.puck.y > state.field.height) {
-        handleGoal(2);
-        return;
-    }
-
-    // Paddle Collisions
-    checkPaddleCollision(state.p1);
-    checkPaddleCollision(state.p2);
-
-    // Particles
-    state.particles.forEach(p => {
-        p.x += p.vx; p.y += p.vy; p.life -= p.decay;
-    });
-    state.particles = state.particles.filter(p => p.life > 0);
-
-    // 3. Broadcast State if Host
-    if (state.mode === 'online_host' && conn && conn.open) {
-        conn.send({
-            type: 'state',
-            p1: { x: state.p1.x, y: state.p1.y },
-            p2: { x: state.p2.x, y: state.p2.y },
-            puck: { x: state.puck.x, y: state.puck.y, vx: state.puck.vx, vy: state.puck.vy },
-            scores: { p1: state.p1.score, p2: state.p2.score }
-        });
-    }
-}
-
-function handleGoal(scorer, visualOnly = false) {
-    if (visualOnly) {
-        // Just effects for Client
-        playSound('score');
-        if (scorer === 1) spawnParticles(state.puck.x, 0, state.p1.color);
-        else spawnParticles(state.puck.x, state.field.height, state.p2.color);
-        return;
-    }
-
-    // Sim Logic
-    playSound('score');
-    state.puck.vx = 0;
-    state.puck.vy = 0;
-
-    if (scorer === 1) {
-        state.p1.score++;
-        spawnParticles(state.puck.x, 0, state.p1.color);
-    } else {
-        state.p2.score++;
-        spawnParticles(state.puck.x, state.field.height, state.p2.color);
-    }
-
-    if (state.mode === 'online_host') broadcast({ type: 'state', event: 'score', scorer: scorer });
-
-    // Check Win
-    if (state.p1.score >= CONFIG.winningScore || state.p2.score >= CONFIG.winningScore) {
-        endGame(scorer === 1);
-    } else {
-        resetPositions();
-    }
-}
-
-function broadcast(msg) {
-    if (conn && conn.open) {
-        // Mix standard state into event messages for robust sync
-        conn.send({
-            ...msg,
-            p1: { x: state.p1.x, y: state.p1.y },
-            p2: { x: state.p2.x, y: state.p2.y },
-            puck: { x: state.puck.x, y: state.puck.y, vx: state.puck.vx, vy: state.puck.vy },
-            scores: { p1: state.p1.score, p2: state.p2.score }
-        });
-    }
-}
-
-function stopGame() {
-    state.running = false;
-    state.paused = false;
+window.closeLobby = () => {
+    if (conn) { conn.close(); conn = null; }
+    const input = document.getElementById('connect-id-input');
+    if (input) input.value = '';
+    document.getElementById('lobby-modal').classList.add('hidden');
     document.getElementById('main-menu').classList.remove('hidden');
-    document.getElementById('game-ui').classList.add('hidden');
-    document.getElementById('pause-modal').classList.add('hidden');
-    // Reset to top level menu
-    showMainMenu();
-}
-
-function endGame(p1Won) {
-    state.running = false;
-
-    // Broadcast if Host (to tell Client)
-    if (state.mode === 'online_host') {
-        broadcast({ type: 'game_over', p1Won: p1Won });
-    }
-
-    const modal = document.getElementById('game-over-modal');
-    const title = document.getElementById('game-over-title');
-    const score = document.getElementById('game-over-score');
-
-    // If I am P1 (Host/Local/CPU): p1Won means I won.
-    // If I am P2 (online_client): p1Won means P1 won, so I (P2) lost. 
-    // Wait, Client is ALWAYS P2 logic-wise?
-    // Yes. So if p1Won is true, Client (P2) sees "YOU LOSE".
-    // If p1Won is false, Client (P2) sees "YOU WIN".
-
-    const amIP1 = state.mode !== 'online_client';
-    const didIWin = amIP1 ? p1Won : !p1Won;
-
-    title.textContent = didIWin ? "YOU WIN" : "YOU LOSE";
-    title.style.color = didIWin ? "#0ff" : "#ff3366";
-    score.textContent = `${state.p1.score}  -  ${state.p2.score}`;
-
-    // Save High Score (Wins) for ME
-    if (didIWin) {
-        let wins = parseInt(localStorage.getItem('tron_hockey_wins') || '0');
-        wins++;
-        localStorage.setItem('tron_hockey_wins', wins);
-        updateHighScoreDisplay();
-    }
-
-    // Determine Quit Button Text/Action based on Mode
-    const exitBtn = document.getElementById('game-over-exit-btn');
-    if (exitBtn) {
-        if (state.mode === 'online_host' || state.mode === 'online_client') {
-            exitBtn.textContent = "QUIT LOBBY";
-            exitBtn.onclick = () => quitLobby();
-        } else {
-            exitBtn.textContent = "MAIN MENU";
-            exitBtn.onclick = () => returnToMenu();
-        }
-    }
-
-    modal.classList.remove('hidden');
-    document.getElementById('game-ui').classList.add('hidden');
-}
-
-window.quitLobby = () => {
-    // 1. Close connection if open
-    if (conn) {
-        conn.close();
-        conn = null;
-    }
-
-    // 2. Clear any Peer ID cache? 
-    // User requested: "delete cache id save during the match on the storage"
-    // Assuming they mean the Host ID or connection state.
-    localStorage.removeItem('tron_hockey_peer_id');
-
-    // 3. Stop Game Loop
-    state.running = false;
-
-    // 4. Force Reload to Main Page (simulating full exit/reset)
-    // This will trigger the "Connection Lost" modal for the other functionality effectively if they are still listening,
-    // but here we are quitting OUR side.
-    window.location.href = window.location.pathname;
 };
 
 window.returnToMenu = () => {
     document.getElementById('game-over-modal').classList.add('hidden');
     document.getElementById('main-menu').classList.remove('hidden');
-}
-
-// Pause Logic
-window.togglePause = () => {
-    state.paused = !state.paused;
-    const modal = document.getElementById('pause-modal');
-    const title = document.getElementById('pause-title');
-    const resumeBtn = document.getElementById('resume-btn');
-    const exitBtn = document.getElementById('pause-exit-btn');
-
-    if (state.paused) {
-        if (title) title.textContent = "PAUSED";
-        if (resumeBtn) resumeBtn.style.display = 'block'; // Ensure visible
-
-        // Dynamic Exit Logic
-        if (exitBtn) {
-            if (state.mode === 'online_host' || state.mode === 'online_client') {
-                exitBtn.textContent = "QUIT LOBBY";
-                exitBtn.onclick = () => quitLobby();
-            } else {
-                exitBtn.textContent = "EXIT";
-                exitBtn.onclick = () => stopGame();
-            }
-        }
-
-        modal.classList.remove('hidden');
-    } else {
-        modal.classList.add('hidden');
-    }
-}
+    showMainMenu();
+};
 
 window.restartGame = () => {
     document.getElementById('game-over-modal').classList.add('hidden');
     startGame(state.mode);
-}
-
-function updateHighScoreDisplay() {
-    const wins = localStorage.getItem('tron_hockey_wins') || '0';
-    const el = document.getElementById('highscore-display');
-    if (el) el.textContent = `WINS: ${wins}`;
-}
-
-function checkPaddleCollision(paddle) {
-    const dx = state.puck.x - paddle.x;
-    const dy = state.puck.y - paddle.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const minDist = state.puck.radius + paddle.radius;
-
-    if (dist < minDist) {
-        // Unstick
-        const angle = Math.atan2(dy, dx);
-        const overlap = minDist - dist;
-        state.puck.x += Math.cos(angle) * overlap;
-        state.puck.y += Math.sin(angle) * overlap;
-
-        const normalX = Math.cos(angle);
-        const normalY = Math.sin(angle);
-
-        // 1. Reflect puck's current velocity
-        const dot = state.puck.vx * normalX + state.puck.vy * normalY;
-        state.puck.vx = (state.puck.vx - 2 * dot * normalX);
-        state.puck.vy = (state.puck.vy - 2 * dot * normalY);
-
-        // 2. Add Paddle Impulse (Key for hitting the ball!)
-        // Only if moving roughly towards the puck
-        const pSpeed = Math.sqrt(paddle.vx ** 2 + paddle.vy ** 2);
-        if (pSpeed > 0.1) {
-            state.puck.vx += paddle.vx * 1.5;
-            state.puck.vy += paddle.vy * 1.5;
-        } else {
-            // If paddle is still, just bounce off loosely
-            state.puck.vx *= 0.8;
-            state.puck.vy *= 0.8;
-        }
-
-        // Cap speed
-        const currentSpeed = Math.sqrt(state.puck.vx ** 2 + state.puck.vy ** 2);
-        if (currentSpeed > state.puck.maxSpeed) {
-            state.puck.vx = (state.puck.vx / currentSpeed) * state.puck.maxSpeed;
-            state.puck.vy = (state.puck.vy / currentSpeed) * state.puck.maxSpeed;
-        }
-
-        playSound('hit');
-        // spawnParticles(state.puck.x, state.puck.y, '#fff'); // Disabled on hit
-    }
-}
-
-// Rendering
-// Helper for View Transformation
-function viewX(x) {
-    if (state.flipped) return state.field.width - x;
-    return x;
-}
-
-function viewY(y) {
-    if (state.flipped) return state.field.height - y;
-    return y;
-}
-
-// Toggle Flip
-window.toggleFlip = () => {
-    state.flipped = !state.flipped;
-}
-
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear raw canvas first
-
-    const w = canvas.width;
-    const h = canvas.height;
-
-    // Auto-flip for client if not set yet
-    if (state.mode === 'online_client' && state.flipped === undefined) {
-        state.flipped = true;
-    }
-
-    const centerY = h / 2;
-
-    // --- Background Grid ---
-    drawGrid(w, h);
-
-    // --- Field Markings ---
-    ctx.lineWidth = 3;
-
-    // Center Line
-    ctx.strokeStyle = '#2a4d53';
-    ctx.beginPath();
-    ctx.moveTo(0, centerY - 6);
-    ctx.lineTo(w, centerY - 6);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, centerY + 6);
-    ctx.lineTo(w, centerY + 6);
-    ctx.stroke();
-
-    // Center Circle
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = '#00ffff';
-    ctx.beginPath();
-    ctx.arc(w / 2, centerY, w * 0.22, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(w / 2, centerY, w * 0.18, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
-    ctx.stroke();
-
-    // Goal Keeper Lines & Goals
-    const goalAreaRadius = w * 0.3;
-
-    // Visual Top Glow (Depends on Flip)
-    // If Not Flipped: Top is P2 (Yellow)
-    // If Flipped: Top Screen maps to Bottom Field (P1 White)
-    // WAIT! Inverted Logic:
-    // If Flipped: viewY(0) = H. viewY(H) = 0.
-    // If I draw at (w/2, -60) [Visual Top]:
-    // This corresponds to Field Coord:
-    // If I use viewY(-60) -> H - (-60) = Bottom Field.
-    // So if I want to draw the "Field Top Goal" (Yellow) at the "Screen Bottom" (Client View):
-    // I should invoke drawArc at viewX(..), viewY(..).
-
-    // Let's use view coords for Field Markings too!
-
-    // Top Goal (P2 Yellow - Field Top)
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = state.p2.color;
-    ctx.strokeStyle = state.p2.color;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    // Use viewY ensures it draws at Bottom Screen if Flipped
-    // Arc angles need flipping? 
-    // Top Arc: 0 to PI (Downwards U). 
-    // If drawn at Bottom Screen (flipped), it should be PI to 0 (Upwards U).
-    // ctx.arc handles start/end, but context isn't rotated.
-    // If viewY flips Y, the arc "direction" might look wrong if I don't adjust angles?
-    // Actually, let's just manually swap VISUALS based on perspective, simpler than transforming arcs.
-
-    const isFlipped = state.flipped;
-
-    const topColor = isFlipped ? state.p1.color : state.p2.color;
-    const botColor = isFlipped ? state.p2.color : state.p1.color;
-
-    // Visual Top Goal
-    ctx.shadowColor = topColor;
-    ctx.strokeStyle = topColor;
-    ctx.beginPath();
-    ctx.arc(w / 2, -60, goalAreaRadius, 0, Math.PI, false);
-    ctx.stroke();
-
-    // Visual Bottom Goal
-    ctx.shadowColor = botColor;
-    ctx.strokeStyle = botColor;
-    ctx.beginPath();
-    ctx.arc(w / 2, h + 60, goalAreaRadius, Math.PI, 0, false);
-    ctx.stroke();
-
-    ctx.shadowBlur = 0;
-
-
-    // --- Scoreboard ---
-    ctx.textBaseline = "top";
-    const fontSize = h * 0.08;
-    ctx.font = `900 ${fontSize}px sans-serif`;
-
-    const drawScore = (val, x, y, color, baseline) => {
-        ctx.textBaseline = baseline;
-        ctx.lineJoin = 'round';
-        ctx.miterLimit = 2;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 4;
-        ctx.textAlign = "right";
-        ctx.strokeText(val, x, y);
-    };
-
-    // If Flipped: I am P2 (Yellow). I want My Score at Bottom. P1 (White) at Top.
-    // If Normal: P2 Top, P1 Bottom.
-
-    const topScore = isFlipped ? state.p1.score : state.p2.score;
-    const botScore = isFlipped ? state.p2.score : state.p1.score;
-
-    drawScore(topScore.toString(), w - 25, 25, topColor, "top");
-    drawScore(botScore.toString(), w - 25, h - 25, botColor, "bottom");
-
-    // --- Objects (Use View Transform) ---
-    drawPaddle(state.p1);
-    drawPaddle(state.p2);
-    drawPuck(state.puck);
-
-    // --- Particles ---
-    state.particles.forEach(p => {
-        ctx.globalAlpha = p.life > 0 ? p.life : 0;
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(viewX(p.x), viewY(p.y), 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1.0;
-    });
-
-    requestAnimationFrame(draw);
-}
-
-
-
-function drawGrid(w, h) {
-    const cols = 5;
-    const rows = 9;
-    const cellW = w / cols;
-    const cellH = h / rows;
-    const gap = 5;
-
-    ctx.strokeStyle = '#103035';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 0;
-
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            const x = c * cellW + gap;
-            const y = r * cellH + gap;
-            const cw = cellW - gap * 2;
-            const ch = cellH - gap * 2;
-
-            ctx.beginPath();
-            ctx.roundRect(x, y, cw, ch, 12);
-            ctx.stroke();
-        }
-    }
-}
-
-function drawPaddle(player) {
-    const x = viewX(player.x);
-    const y = viewY(player.y);
-    const radius = player.radius;
-    const color = player.color;
-
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = color;
-
-    if (color === '#ffffff') {
-        ctx.lineWidth = 5;
-        ctx.strokeStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#555';
-        ctx.beginPath();
-        ctx.arc(x, y, Math.max(0, radius - 6), 0, Math.PI * 2);
-        ctx.stroke();
-    } else {
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(x, y, Math.max(0, radius - 8), 0, Math.PI * 2);
-        ctx.stroke();
-    }
-    ctx.shadowBlur = 0;
-}
-
-function drawPuck(puck) {
-    const x = viewX(puck.x);
-    const y = viewY(puck.y);
-    const radius = puck.radius;
-
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = '#0ff';
-    ctx.strokeStyle = '#0ff';
-    ctx.lineWidth = 5;
-
-    ctx.beginPath(); ctx.arc(x, y, radius, Math.PI, 1.5 * Math.PI - 0.5); ctx.stroke();
-    ctx.beginPath(); ctx.arc(x, y, radius, 1.5 * Math.PI + 0.5, 0); ctx.stroke();
-    ctx.beginPath(); ctx.arc(x, y, radius, 0 + 0.5, 0.5 * Math.PI); ctx.stroke();
-    ctx.beginPath(); ctx.arc(x, y, radius, 0.5 * Math.PI + 0.5, Math.PI); ctx.stroke();
-
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    const gap = 6;
-    ctx.moveTo(x, y - radius + gap); ctx.lineTo(x, y - radius - 4);
-    ctx.moveTo(x, y + radius - gap); ctx.lineTo(x, y + radius + 4);
-    ctx.moveTo(x - radius + gap, y); ctx.lineTo(x - radius - 4, y);
-    ctx.moveTo(x + radius + gap, y); ctx.lineTo(x + radius + 4, y);
-    ctx.stroke();
-
-    ctx.shadowColor = '#ffcc00';
-    ctx.strokeStyle = '#ffcc00';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(x, y, radius * 0.5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-}
-
-// Input Handling
-function handleInput(x, y, isP1) {
-    if (!state.running) return;
-
-    // In Online Client mode, we ALWAYS control P2, but due to view rotation, 
-    // the visuals 'feels' like P1. The coordinates x,y are already transformed if needed.
-    // However, the paddle logic needs to know which state object to update.
-
-    let paddle;
-    if (state.mode === 'online_client') {
-        paddle = state.p2; // Client controls P2
-    } else if (state.mode === 'online_host' || state.mode === 'cpu') {
-        paddle = state.p1; // Host/CPU controls P1
-    } else {
-        // Local mode: explicit flag
-        paddle = isP1 ? state.p1 : state.p2;
-    }
-
-    // Constraints depend on who is playing and which side they are on
-    // P1 is Bottom (y > h/2), P2 is Top (y < h/2)
-    // But wait, handleInput clamps Y logic based on isP1 flag?
-    // Let's rewrite clamp logic based on the *actual paddle* being moved.
-
-    const isBottomPaddle = (paddle === state.p1);
-
-    // Define bounds
-    // Bottom Paddle (P1): [h/2 + r, h - r]
-    // Top Paddle (P2): [r, h/2 - r]
-
-    const minY = isBottomPaddle ? state.field.height / 2 + paddle.radius : paddle.radius;
-    const maxY = isBottomPaddle ? state.field.height - paddle.radius : state.field.height / 2 - paddle.radius;
-
-    paddle.x = Math.max(paddle.radius, Math.min(state.field.width - paddle.radius, x));
-    paddle.y = Math.max(minY, Math.min(maxY, y));
-}
-
-// Mouse/Touch
-canvas.addEventListener('pointermove', (e) => {
-    e.preventDefault();
-    if (state.paused) return;
-
-    const rect = canvas.getBoundingClientRect();
-    let x = e.clientX - rect.left;
-    let y = e.clientY - rect.top;
-
-    // CLIENT VIEW ROTATION HANDLING
-    // If Flipped, input coordinates need inversion
-    if (state.flipped) {
-        x = state.field.width - x;
-        y = state.field.height - y;
-    }
-
-    handleInput(x, y, true);
-});
-
-canvas.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    if (state.paused) return;
-
-    const rect = canvas.getBoundingClientRect();
-
-    for (let i = 0; i < e.touches.length; i++) {
-        const t = e.touches[i];
-        let x = t.clientX - rect.left;
-        let y = t.clientY - rect.top;
-
-        if (state.flipped) {
-            x = state.field.width - x;
-            y = state.field.height - y;
-        }
-
-        if (state.mode === 'local') {
-            if (y > state.field.height / 2) handleInput(x, y, true);
-            else handleInput(x, y, false);
-        } else {
-            handleInput(x, y, true);
-        }
-    }
-}, { passive: false });
-
-
-// Game Loop
-const updateLoop = setInterval(update, 1000 / 60);
-requestAnimationFrame(draw);
-
-// UI Logic
-// updateScore function removed as score is handled by handleGoal and drawn in draw()
-
-window.startGame = (mode) => {
-    state.mode = mode;
-    state.difficulty = document.getElementById('difficulty-select').value;
-    state.running = true;
-    state.p1.score = 0;
-    state.p2.score = 0;
-
-    resize();
-    resetPositions();
-
-    document.getElementById('main-menu').classList.add('hidden');
-    document.getElementById('game-ui').classList.remove('hidden');
-
-    if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(e => console.log(e));
-    }
-
-    if (audioCtx.state === 'suspended') audioCtx.resume();
 };
 
+window.endGame = (w) => {
+    state.running = false; if (state.mode === 'online_host') broadcast({ type: 'game_over', p1Won: w });
+    const win = (state.mode === 'online_client') ? !w : w;
+    document.getElementById('game-over-title').textContent = win ? "YOU WIN" : "YOU LOSE";
+    document.getElementById('game-over-score').textContent = `${state.p1.score} - ${state.p2.score}`;
+    document.getElementById('game-over-modal').classList.remove('hidden');
+};
+window.showAlert = (t, m) => { document.getElementById('alert-title').textContent = t; document.getElementById('alert-message').textContent = m; document.getElementById('alert-modal').classList.remove('hidden'); };
 
-// --- PWA LOGIC ---
+setInterval(update, 1000 / 60);
+requestAnimationFrame(draw);
+window.addEventListener('resize', resize);
+setTimeout(() => { resize(); updateVersionDisplay(); }, 100);
 
-// 1. Install Prompt
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    // Show Install Modal
-    document.getElementById('install-modal').classList.remove('hidden');
-});
-
-document.getElementById('install-btn').addEventListener('click', async () => {
-    if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
-        deferredPrompt = null;
-        document.getElementById('install-modal').classList.add('hidden');
-    }
-});
-
-// 2. Update Logic
-window.updateApp = () => {
-    if (!navigator.onLine) {
-        document.getElementById('offline-modal').classList.remove('hidden');
-        return;
-    }
-    // Show confirmation modal instead of alert
-    document.getElementById('update-modal').classList.remove('hidden');
+window.updateVersionDisplay = () => {
+    const v = localStorage.getItem('app_version') || '1.0.30';
+    const display = document.getElementById('app-version-display');
+    if (display) display.textContent = `v${v}`;
 };
 
 window.performUpdate = async () => {
-    // Hide modal
-    document.getElementById('update-modal').classList.add('hidden');
-
-    if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (let registration of registrations) {
-            await registration.unregister();
-        }
+    if (window.pendingVersion) {
+        localStorage.setItem('app_version', window.pendingVersion);
     }
 
-    // Clear Caches
+    // Clear Service Worker Caches
     if ('caches' in window) {
         const keys = await caches.keys();
         await Promise.all(keys.map(key => caches.delete(key)));
     }
 
+    // Unregister Service Workers
+    if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (let reg of regs) { await reg.unregister(); }
+    }
+
     window.location.reload(true);
 };
 
-// Difficulty Selection Logic
-window.selectDiff = (diff, btn) => {
-    // Set hidden input
-    document.getElementById('difficulty-select').value = diff;
+window.updateApp = async () => {
+    if (!navigator.onLine) {
+        document.getElementById('offline-modal').classList.remove('hidden');
+        return;
+    }
 
-    // Update active class
-    const btns = document.querySelectorAll('.diff-btn');
-    btns.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    const btn = document.getElementById('update-app-btn');
+    if (btn) btn.textContent = "CHECKING...";
+
+    try {
+        const response = await fetch('version.json?t=' + Date.now());
+        const data = await response.json();
+        const current = localStorage.getItem('app_version') || '1.0.0';
+
+        if (data.version !== current) {
+            window.pendingVersion = data.version;
+            const modal = document.getElementById('update-modal');
+            if (modal) modal.classList.remove('hidden');
+            if (btn) btn.textContent = "UPDATE FOUND!";
+        } else {
+            if (btn) btn.textContent = "UP TO DATE";
+            setTimeout(() => { if (btn) btn.textContent = "CHECK UPDATES"; }, 2000);
+        }
+    } catch (e) {
+        console.error("Update check failed", e);
+        if (btn) btn.textContent = "CHECK FAILED";
+        setTimeout(() => { if (btn) btn.textContent = "CHECK UPDATES"; }, 2000);
+    }
 };
+function copyToClipboard(t, l) { navigator.clipboard.writeText(t).then(() => console.log(l + " copied")); }
 
-window.copyToClipboard = (text, label) => {
-    navigator.clipboard.writeText(text).then(() => {
-        // Find or create a temporary toast/feedback if needed, 
-        // but for simplicity we can just alert or update the lobby-status if it's visible.
-        // Let's use a simpler approach: change the button text temporarily.
-        console.log(`${label} copied: ${text}`);
-    }).catch(err => {
-        console.error('Failed to copy: ', err);
+// PWA Installation Logic
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const modal = document.getElementById('install-modal');
+    if (modal) modal.classList.remove('hidden');
+});
+
+const installBtn = document.getElementById('install-btn');
+if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User Choice: ${outcome}`);
+        deferredPrompt = null;
+        const modal = document.getElementById('install-modal');
+        if (modal) modal.classList.add('hidden');
     });
-};
+}
 
-window.addEventListener('resize', resize);
-// Initial delay to ensure DOM is ready and container has size
-setTimeout(() => { resize(); resetPositions(); updateHighScoreDisplay(); }, 100);
+window.addEventListener('appinstalled', (e) => {
+    console.log('App Installed');
+    deferredPrompt = null;
+    const modal = document.getElementById('install-modal');
+    if (modal) modal.classList.add('hidden');
+});

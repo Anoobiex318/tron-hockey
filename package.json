@@ -5,7 +5,7 @@
   "main": "script.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "copyfiles -f index.html style.css manifest.json sw.js icon.png public && javascript-obfuscator script.js --output public/script.js --compact true --self-defending false --debug-protection false"
+    "build": "copyfiles -f index.html style.css manifest.json sw.js icon.png version.json public && javascript-obfuscator script.js --output public/script.js --compact true --self-defending false --debug-protection false"
   },
   "keywords": [],
   "author": "",
