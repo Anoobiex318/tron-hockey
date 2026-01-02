@@ -108,19 +108,13 @@
 
         <div class="menu-content">
             <div class="menu-group" style="padding: 20px;">
-                <div class="lobby-section">
-                    <label style="color: rgba(255,255,255,0.5); font-size: 0.8rem; letter-spacing: 1px;">MY GRID
-                        ID</label>
-                    <input type="text" id="peer-id-input" readonly
-                        style="background: rgba(0,0,0,0.3); border: 1px solid var(--primary-color); border-radius: 8px; padding: 10px; width: 100%; text-align: center; color: #0ff; font-family: monospace; font-size: 1.1rem; margin: 10px 0;">
-                    <div class="lobby-row">
-                        <button class="btn btn-cyan" onclick="copyPeerId()">COPY ID</button>
-                        <button class="btn btn-yellow" onclick="openShareModal()">SHARE GAME</button>
-                    </div>
+                <input type="hidden" id="peer-id-input">
+                <div class="lobby-row">
+                    <button class="btn btn-yellow" onclick="openShareModal()">SHARE GAME</button>
+                    <button class="btn btn-cyan" onclick="openScanner()">SCAN QR CODE</button>
                 </div>
             </div>
 
-            <button class="btn btn-cyan" onclick="openJoinOptions()">JOIN GAME</button>
             <button class="btn btn-magenta" onclick="closeLobby()">EXIT LOBBY</button>
         </div>
 
@@ -142,17 +136,7 @@
         </div>
     </div>
 
-    <!-- Join Options Modal -->
-    <div id="join-options-modal" class="menu-overlay hidden" style="z-index: 2200;">
-        <div class="title" style="font-size: 2.22rem;">JOIN GAME</div>
-        <div class="subtitle">SELECT METHOD</div>
-        <div class="menu-content">
-            <button class="btn btn-cyan" onclick="openJoinInput()">ENTER OPPONENT ID</button>
-            <button class="btn btn-yellow" onclick="openScanner()">SCAN QR CODE</button>
-            <button class="btn btn-magenta"
-                onclick="document.getElementById('join-options-modal').classList.add('hidden')">CANCEL</button>
-        </div>
-    </div>
+
 
     <!-- Scanner Modal -->
     <div id="scanner-modal" class="menu-overlay hidden" style="z-index: 2400; background: #000;">
@@ -165,17 +149,7 @@
         </div>
     </div>
 
-    <!-- Join ID Sub-Modal -->
-    <div id="join-id-modal" class="menu-overlay hidden" style="z-index: 2300;">
-        <div class="title" style="font-size: 2rem;">CONNECT</div>
-        <div class="subtitle">ENTER TARGET ID</div>
-        <div class="menu-content">
-            <input type="text" id="connect-id-input" placeholder="Opponent ID" style="width: 100%; max-width: 320px;">
-            <button class="btn btn-cyan" onclick="connectToPeerFromInput()">CONNECT</button>
-            <button class="btn btn-magenta"
-                onclick="document.getElementById('join-id-modal').classList.add('hidden')">BACK</button>
-        </div>
-    </div>
+
 
     <!-- Pause Menu (This is full screen overlay, can stay out or in, but usually full screen is better out) -->
     <!-- Actually user complained about pause button positioning, not the menu itself. -->

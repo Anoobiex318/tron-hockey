@@ -455,8 +455,12 @@ function setupConn() {
         setTimeout(() => { document.getElementById('lobby-modal').classList.add('hidden'); startGame(isHost ? 'online_host' : 'online_client'); }, 1000);
     });
     conn.on('data', d => {
-        if (state.mode === 'online_host' && d.type === 'input') {
-            state.p2.x = d.x * state.field.width; state.p2.y = d.y * state.field.height;
+        if (state.mode === 'online_host') {
+            if (d.type === 'input') {
+                state.p2.x = d.x * state.field.width; state.p2.y = d.y * state.field.height;
+            } else if (d.type === 'request_rematch') {
+                startGame('online_host');
+            }
         } else if (state.mode === 'online_client') {
             if (d.type === 'state') {
                 state.p1.x = d.p1.x * state.field.width; state.p1.y = d.p1.y * state.field.height;
@@ -470,7 +474,9 @@ function setupConn() {
                 if (d.event === 'score') handleGoal(d.scorer, true);
             } else if (d.type === 'reset') { resize(); resetPositions(); }
             else if (d.type === 'countdown') startCountdown();
-            else if (d.type === 'game_over') endGame(d.p1Won);
+            else if (d.type === 'rematch') {
+                startGame('online_client');
+            } else if (d.type === 'game_over') endGame(d.p1Won);
         }
     });
     conn.on('close', () => {
@@ -502,9 +508,13 @@ window.startGame = (m) => {
     state.turn = Math.random() < 0.5 ? 1 : 2; // Random first turn
     resize();
     resetPositions();
-    document.getElementById('main-menu').classList.add('hidden');
+
+    // Hide all menu/modals
+    document.querySelectorAll('.menu-overlay').forEach(el => el.classList.add('hidden'));
+
     document.getElementById('game-ui').classList.remove('hidden');
     startCountdown();
+    if (state.mode === 'online_host') broadcast({ type: 'rematch' });
 };
 
 window.selectDiff = (diff, btn) => {
@@ -555,11 +565,7 @@ window.openLobby = () => {
     document.getElementById('lobby-modal').classList.remove('hidden');
     initPeer();
 };
-window.copyPeerId = () => {
-    navigator.clipboard.writeText(document.getElementById('peer-id-input').value);
-    document.getElementById('lobby-status').textContent = "ID COPIED!";
-    setTimeout(() => { document.getElementById('lobby-status').textContent = "READY TO CONNECT"; }, 2000);
-};
+
 
 window.openShareModal = () => {
     const id = document.getElementById('peer-id-input').value;
@@ -589,21 +595,9 @@ window.copyShareLink = () => {
     showAlert("COPIED", "Game link copied to clipboard!");
 };
 
-window.openJoinOptions = () => {
-    document.getElementById('join-options-modal').classList.remove('hidden');
-};
 
-window.openJoinInput = () => {
-    document.getElementById('join-options-modal').classList.add('hidden');
-    document.getElementById('join-id-modal').classList.remove('hidden');
-};
 
-window.connectToPeerFromInput = () => {
-    const id = document.getElementById('connect-id-input').value.trim();
-    if (!id) return;
-    connectToPeer(id);
-    document.getElementById('join-id-modal').classList.add('hidden');
-};
+
 
 window.connectToPeer = (targetId) => {
     const id = targetId || document.getElementById('connect-id-input').value.trim();
@@ -616,7 +610,6 @@ window.connectToPeer = (targetId) => {
 let html5QrCode = null;
 
 window.openScanner = () => {
-    document.getElementById('join-options-modal').classList.add('hidden');
     document.getElementById('scanner-modal').classList.remove('hidden');
 
     html5QrCode = new Html5Qrcode("reader");
@@ -660,13 +653,26 @@ window.stopScanner = async () => {
 window.togglePause = () => { state.paused = !state.paused; document.getElementById('pause-modal').classList.toggle('hidden', !state.paused); };
 window.stopGame = () => {
     state.running = false;
-    if (conn) { conn.close(); conn = null; }
+
+    // Clear connection and stored session ID
+    if (conn) {
+        conn.close();
+        conn = null;
+    }
+    localStorage.removeItem('tron_hockey_peer_id');
+    if (peer) {
+        peer.destroy();
+        peer = null;
+    }
+
     const input = document.getElementById('connect-id-input');
     if (input) input.value = '';
+
+    // Reset UI: Hide all possible overlays and show main menu
+    document.querySelectorAll('.menu-overlay').forEach(el => el.classList.add('hidden'));
     document.getElementById('main-menu').classList.remove('hidden');
     document.getElementById('game-ui').classList.add('hidden');
-    document.getElementById('pause-modal').classList.add('hidden');
-    document.getElementById('game-over-modal').classList.add('hidden');
+
     showMainMenu();
 };
 window.toggleFlip = () => { state.flipped = !state.flipped; };
@@ -696,8 +702,11 @@ window.returnToMenu = () => {
 };
 
 window.restartGame = () => {
-    document.getElementById('game-over-modal').classList.add('hidden');
-    startGame(state.mode);
+    if (state.mode === 'online_client') {
+        if (conn && conn.open) conn.send({ type: 'request_rematch' });
+    } else {
+        startGame(state.mode);
+    }
 };
 
 window.endGame = (w) => {
